@@ -34,6 +34,12 @@ public:
                 return util::Result<String, app::HttpError>::Ok(response);
             } else {
                 Serial.printf("HTTP POST failed with code %d\n", httpCode);
+                Serial.println("URL:");
+                Serial.println(url);
+                Serial.println("Response:");
+                Serial.println(response);
+                Serial.println("JSON Data:");
+                Serial.println(jsonData);
                 return util::Result<String, app::HttpError>::Err(app::HttpError::RequestFailed);
             }
         } else {

@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <memory>
 #include <vector>
+#include "hal/I2cSwitcher.hpp"
 
 namespace hal {
 
@@ -9,10 +10,10 @@ namespace hal {
 class I2cBus {
 public:
     explicit I2cBus(int sda, int scl, uint8_t busId)
-        : sda_(sda), scl_(scl), busId_(busId), wire_(new TwoWire(busId)) {}
+        : sda_(sda), scl_(scl), busId_(busId) {}
 
     bool begin(uint32_t frequency = 100000) {
-        wire_->begin(sda_, scl_, frequency);
+        hal::I2cSwitcher::instance().use(sda_, scl_, frequency);
         return true;
     }
 
@@ -20,9 +21,11 @@ public:
     std::vector<uint8_t> scan() {
         std::vector<uint8_t> devices;
 
+        // Ensure the bus is selected before scanning
+        hal::I2cSwitcher::instance().use(sda_, scl_);
         for (uint8_t addr = 1; addr < 127; addr++) {
-            wire_->beginTransmission(addr);
-            if (wire_->endTransmission() == 0) {
+            hal::I2cSwitcher::instance().wire().beginTransmission(addr);
+            if (hal::I2cSwitcher::instance().wire().endTransmission() == 0) {
                 devices.push_back(addr);
             }
         }
@@ -32,12 +35,16 @@ public:
 
     // Check if device is present at address
     bool isDevicePresent(uint8_t addr) {
-        wire_->beginTransmission(addr);
-        return (wire_->endTransmission() == 0);
+        hal::I2cSwitcher::instance().use(sda_, scl_);
+        hal::I2cSwitcher::instance().wire().beginTransmission(addr);
+        return (hal::I2cSwitcher::instance().wire().endTransmission() == 0);
     }
 
-    // Get the underlying TwoWire object
-    TwoWire& getWire() { return *wire_; }
+    // Select this bus and return the shared TwoWire
+    TwoWire& select() {
+        hal::I2cSwitcher::instance().use(sda_, scl_);
+        return hal::I2cSwitcher::instance().wire();
+    }
 
     uint8_t getBusId() const { return busId_; }
 
@@ -58,7 +65,7 @@ private:
     int sda_;
     int scl_;
     uint8_t busId_;
-    std::unique_ptr<TwoWire> wire_;
+    // No owned TwoWire; uses shared Wire via I2cSwitcher
 };
 
 } // namespace hal

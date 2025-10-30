@@ -18,7 +18,7 @@ Software
   * Use ArduinoOTA to allow for immediate remote reprogramming  
 * HTTPS FW Update  
   * Once on WiFi and once per hour afterwards, the device should check the latest FW version and if a newer one exists, update to it using the ESP API  
-  * Send a POST request to [https://data.yoerik.com/fw/update](https://data.yoerik.com/fw/update)  
+  * Send a POST request to [https://data.yoerik.com/particle/fw/update](https://data.yoerik.com/particle/fw/update)  
     * {"ID": ESP Chip ID, "ver": current FW version}  
     * The server will respond with either “True” or “False” if there is an update.  
     * If true, send {"ID": ESP Chip ID, "ver": current FW version, "download": True}  

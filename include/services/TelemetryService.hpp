@@ -55,7 +55,7 @@ public:
         }
 
         // Motor status
-        fields["motor_duty"] = health.motor.dutyCycle;
+        fields["motor_duty"] = float(health.motor.dutyCycle);  // print 0 as 0.0 not 0
         fields["motor_direction"] = health.motor.directionForward ? 1 : 0;
         fields["motor_en_a"] = health.motor.enAEnabled ? 1 : 0;
         fields["motor_en_b"] = health.motor.enBEnabled ? 1 : 0;

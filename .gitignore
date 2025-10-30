@@ -5,3 +5,6 @@
 .vscode/ipch
 .DS_Store
 OldCode/
+
+# Secure configuration with credentials
+include/SecureConfig.hpp

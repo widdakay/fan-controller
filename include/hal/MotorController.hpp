@@ -26,8 +26,8 @@ public:
         ledcSetup(pwmChannel_, pwmFreqHz_, pwmBits_);
         ledcAttachPin(pinPwm_, pwmChannel_);
 
-        // Start with motor off, forward direction
-        setDirection(true);
+        // Start with motor off, reversed direction
+        setDirection(false);
         setPower(0.0f);
     }
 

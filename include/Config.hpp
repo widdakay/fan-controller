@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <array>
+#include "SecureConfig.hpp"
 
 namespace config {
 
@@ -51,7 +52,7 @@ inline constexpr int PIN_MOTOR_PWM  = 38;
 inline constexpr uint8_t I2C_ADDR_ADS1115 = 0x48;
 inline constexpr uint8_t I2C_ADDR_INA226  = 0x40;
 inline constexpr uint8_t I2C_ADDR_BME688  = 0x76;  // or 0x77
-inline constexpr uint8_t I2C_ADDR_SI7021  = 0x40;
+inline constexpr uint8_t I2C_ADDR_AHT20   = 0x38;  // AHT20 temperature & humidity sensor
 inline constexpr uint8_t I2C_ADDR_ZMOD4510 = 0x32;
 
 // ============================================================================
@@ -82,7 +83,7 @@ inline constexpr float THERMISTOR_SERIES_R = 10000.0f;  // Series resistor
 // Timing Configuration
 // ============================================================================
 
-inline constexpr uint32_t WATCHDOG_TIMEOUT_MS = 5000;  // 5 seconds
+inline constexpr uint32_t WATCHDOG_TIMEOUT_MS = 60000;  // 60 seconds (allow for WiFi scan during setup)
 
 inline constexpr uint32_t TASK_HEALTH_REPORT_MS = 5000;   // 5 seconds
 inline constexpr uint32_t TASK_MQTT_PUBLISH_MS = 10000;   // 10 seconds
@@ -103,27 +104,17 @@ inline constexpr uint32_t ONEWIRE_CONVERSION_MS = 800;
 // Network Configuration
 // ============================================================================
 
-struct WiFiCredential {
-    const char* ssid;
-    const char* password;
-};
-
-// TODO: Move to separate secure configuration file
-inline constexpr std::array<WiFiCredential, 3> WIFI_CREDENTIALS = {{
-    {"YourSSID1", "YourPassword1"},
-    {"YourSSID2", "YourPassword2"},
-    {"YourSSID3", "YourPassword3"}
-}};
+// WiFi credentials and MQTT server are defined in SecureConfig.hpp
+// Copy SecureConfig.hpp.example to SecureConfig.hpp and update with your credentials
 
 // MQTT Configuration
-inline constexpr const char* MQTT_SERVER = "10.10.1.20";
 inline constexpr uint16_t MQTT_PORT = 1883;
 inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "home/fan1/power";
 inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "home/fan1/power/status";
 
 // HTTPS API Endpoints
 inline constexpr const char* API_INFLUXDB = "https://data.yoerik.com/particle/log";
-inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/fw/update";
+inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/particle/fw/update";
 
 // Device identification
 inline constexpr const char* DEVICE_NAME = "UnderHouseFan";

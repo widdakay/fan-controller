@@ -10,6 +10,7 @@
 #include "hal/OneWireBus.hpp"
 #include "hal/sensors/Bme688.hpp"
 #include "hal/sensors/Si7021.hpp"
+#include "hal/sensors/Aht20.hpp"
 #include "hal/sensors/Zmod4510.hpp"
 #include "services/WiFiManager.hpp"
 #include "services/MqttClient.hpp"
@@ -21,6 +22,7 @@
 #include "util/Timer.hpp"
 #include <memory>
 #include <vector>
+#include "hal/I2cSwitcher.hpp"
 #include <Arduino.h>
 #include <Wire.h>
 #include <esp_system.h>
@@ -36,8 +38,8 @@ public:
               config::PIN_MOTOR_EN_A, config::PIN_MOTOR_EN_B,
               config::PIN_MOTOR_PWM, config::MOTOR_PWM_FREQ_HZ,
               config::MOTOR_PWM_BITS)),
-          thermistor_(config::THERMISTOR_R0, 25.0f, 3950.0f, config::THERMISTOR_SERIES_R),
-          oneWireConversionTimer_(config::ONEWIRE_CONVERSION_MS)
+          oneWireConversionTimer_(config::ONEWIRE_CONVERSION_MS),
+          thermistor_(config::THERMISTOR_SERIES_R)
     {}
 
     void setup() {
@@ -105,6 +107,7 @@ private:
     std::vector<std::unique_ptr<hal::I2cBus>> i2cBuses_;
     std::vector<std::unique_ptr<hal::Bme688>> bme688Sensors_;
     std::vector<std::unique_ptr<hal::Si7021>> si7021Sensors_;
+    std::vector<std::unique_ptr<hal::Aht20>> aht20Sensors_;
     std::vector<std::unique_ptr<hal::Zmod4510>> zmod4510Sensors_;
 
     // OneWire buses
@@ -140,27 +143,24 @@ private:
     void initializeHardware_() {
         Serial.println("Initializing hardware...");
 
-        // Initialize onboard I2C
-        Wire.begin(config::PIN_I2C_ONBOARD_SDA, config::PIN_I2C_ONBOARD_SCL);
+        // Initialize shared I2C on onboard pins first
+        hal::I2cSwitcher::instance().use(config::PIN_I2C_ONBOARD_SDA, config::PIN_I2C_ONBOARD_SCL);
 
         // Initialize ADS1115
-        adc_ = std::make_unique<hal::Ads1115>(Wire, config::I2C_ADDR_ADS1115);
-        if (adc_->begin()) {
-            Serial.println("  ADS1115: OK");
-        } else {
-            Serial.println("  ADS1115: FAILED");
-        }
+        adc_ = std::make_unique<hal::Ads1115>(hal::I2cSwitcher::instance().wire(), config::I2C_ADDR_ADS1115, 0);
+        bool adcOk = adc_->begin();
+        Serial.printf("  ADS1115: %s\n", adcOk ? "OK" : "FAILED");
 
         // Initialize INA226
-        powerMonitor_ = std::make_unique<hal::Ina226>(Wire, config::I2C_ADDR_INA226);
-        if (powerMonitor_->begin(config::INA226_SHUNT_OHM)) {
-            Serial.println("  INA226: OK");
-        } else {
-            Serial.println("  INA226: FAILED");
-        }
+        powerMonitor_ = std::make_unique<hal::Ina226>(hal::I2cSwitcher::instance().wire(), config::I2C_ADDR_INA226, 0);
+        bool inaOk = powerMonitor_->begin(config::INA226_SHUNT_OHM);
+        Serial.printf("  INA226: %s\n", inaOk ? "OK" : "FAILED");
+
+        Serial.printf("Onboard sensors: ADS1115=%s, INA226=%s\n", adcOk ? "OK" : "FAIL", inaOk ? "OK" : "FAIL");
 
         // Initialize motor controller
         motor_->begin();
+        motor_->setDirection(false);
         motor_->setPower(0.0f);
         Serial.println("  Motor Controller: OK");
 
@@ -184,7 +184,8 @@ private:
         std::vector<I2cConfig> i2cConfigs = {
             {config::PIN_I2C1_SDA, config::PIN_I2C1_SCL, 1},
             {config::PIN_I2C2_SDA, config::PIN_I2C2_SCL, 2},
-            {config::PIN_I2C3_SDA, config::PIN_I2C3_SCL, 3}
+            {config::PIN_I2C3_SDA, config::PIN_I2C3_SCL, 3},
+            {config::PIN_I2C4_SDA, config::PIN_I2C4_SCL, 4}
         };
 
         for (const auto& cfg : i2cConfigs) {
@@ -195,31 +196,65 @@ private:
             auto devices = bus->scan();
 
             // Try to initialize sensors on this bus
+            size_t cntBme = 0, cntSi = 0, cntZmod = 0, cntUnknown = 0;
             for (uint8_t addr : devices) {
+                Serial.printf("    Device at 0x%02X\n", addr);
                 if (addr == config::I2C_ADDR_BME688 || addr == 0x77) {
-                    auto bme = std::make_unique<hal::Bme688>(bus->getWire(), addr, cfg.id);
+                    auto bme = std::make_unique<hal::Bme688>(bus->select(), addr, cfg.id);
                     if (bme->begin()) {
                         Serial.printf("    BME688 found at 0x%02X\n", addr);
                         bme688Sensors_.push_back(std::move(bme));
+                        cntBme++;
+                    } else {
+                        Serial.printf("    BME688 device at 0x%02X begin() FAILED\n", addr);
                     }
                 }
 
-                if (addr == config::I2C_ADDR_SI7021) {
-                    auto si = std::make_unique<hal::Si7021>(bus->getWire(), cfg.id);
+                // Si7021 has fixed address 0x40
+                if (addr == 0x40) {
+                    auto si = std::make_unique<hal::Si7021>(bus->select(), cfg.id);
                     if (si->begin()) {
                         Serial.printf("    Si7021 found at 0x%02X\n", addr);
                         si7021Sensors_.push_back(std::move(si));
+                        cntSi++;
+                    } else {
+                        Serial.printf("    Si7021 device at 0x%02X begin() FAILED\n", addr);
+                    }
+                }
+
+                // AHT20 has fixed address 0x38
+                if (addr == config::I2C_ADDR_AHT20) {
+                    auto aht = std::make_unique<hal::Aht20>(bus->select(), cfg.id, config::I2C_ADDR_AHT20);
+                    if (aht->begin()) {
+                        Serial.printf("    AHT20 found at 0x%02X\n", addr);
+                        aht20Sensors_.push_back(std::move(aht));
+                        cntSi++;  // Count as Si7021-compatible sensor
+                    } else {
+                        Serial.printf("    AHT20 device at 0x%02X begin() FAILED\n", addr);
                     }
                 }
 
                 if (addr == config::I2C_ADDR_ZMOD4510) {
-                    auto zmod = std::make_unique<hal::Zmod4510>(bus->getWire(), addr, cfg.id);
+                    auto zmod = std::make_unique<hal::Zmod4510>(bus->select(), addr, cfg.id);
                     if (zmod->begin()) {
                         Serial.printf("    ZMOD4510 found at 0x%02X\n", addr);
                         zmod4510Sensors_.push_back(std::move(zmod));
+                        cntZmod++;
+                    } else {
+                        Serial.printf("    ZMOD4510 device at 0x%02X begin() FAILED\n", addr);
                     }
                 }
+
+                if (addr != config::I2C_ADDR_BME688 && addr != 0x77 &&
+                    addr != 0x40 && addr != config::I2C_ADDR_AHT20 &&
+                    addr != config::I2C_ADDR_ZMOD4510) {
+                    Serial.printf("    Unknown device at 0x%02X\n", addr);
+                    cntUnknown++;
+                }
             }
+
+            Serial.printf("  Bus %d summary: BME688=%zu, Si7021=%zu, ZMOD4510=%zu, Unknown=%zu\n",
+                          cfg.id, cntBme, cntSi, cntZmod, cntUnknown);
 
             i2cBuses_.push_back(std::move(bus));
         }
@@ -344,14 +379,14 @@ private:
                 health.motorTemp.voltage = adcData.motorNtcVolts;
                 health.motorTemp.resistance = thermistor_.resistanceFromV(
                     adcData.motorNtcVolts, adcData.rail3v3Volts);
-                health.motorTemp.tempC = thermistor_.tempCFromR(health.motorTemp.resistance);
+                health.motorTemp.tempC = thermistor_.tempC_from_R(health.motorTemp.resistance);
                 health.motorTemp.inRange = thermistor_.isValidRange(health.motorTemp.tempC, 0.0f, 100.0f);
 
                 // MCU temperature
                 health.mcuExternalTemp.voltage = adcData.mcuNtcVolts;
                 health.mcuExternalTemp.resistance = thermistor_.resistanceFromV(
                     adcData.mcuNtcVolts, adcData.rail3v3Volts);
-                health.mcuExternalTemp.tempC = thermistor_.tempCFromR(health.mcuExternalTemp.resistance);
+                health.mcuExternalTemp.tempC = thermistor_.tempC_from_R(health.mcuExternalTemp.resistance);
                 health.mcuExternalTemp.inRange = thermistor_.isValidRange(health.mcuExternalTemp.tempC, 0.0f, 100.0f);
 
                 health.rail3v3 = adcData.rail3v3Volts;

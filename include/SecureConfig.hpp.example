@@ -1,0 +1,23 @@
+#pragma once
+#include <array>
+
+namespace config {
+
+// WiFi Credentials Structure
+struct WiFiCredential {
+    const char* ssid;
+    const char* password;
+};
+
+// WiFi credentials for network connection
+// Add your WiFi networks here in order of preference
+inline constexpr std::array<WiFiCredential, 3> WIFI_CREDENTIALS = {{
+    {"YourSSID1", "YourPassword1"},
+    {"YourSSID2", "YourPassword2"},
+    {"YourSSID3", "YourPassword3"}
+}};
+
+// MQTT Broker Configuration
+inline constexpr const char* MQTT_SERVER = "192.168.1.100";
+
+} // namespace config

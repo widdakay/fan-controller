@@ -3,15 +3,19 @@
 #include "util/Result.hpp"
 #include <INA226_WE.h>
 #include <Wire.h>
+#include <Arduino.h>
+#include "hal/I2cSwitcher.hpp"
 
 namespace hal {
 
 class Ina226 {
 public:
-    explicit Ina226(TwoWire& wire = Wire, uint8_t addr = 0x40)
-        : wire_(wire), addr_(addr), ina226_(addr) {}
+    explicit Ina226(TwoWire& wire = Wire, uint8_t addr = 0x40, uint8_t busId = 0)
+        : wire_(wire), addr_(addr), busId_(busId), ina226_(addr) {}
 
     bool begin(float shuntResistorOhm = 0.001f) {
+        hal::I2cSwitcher::instance().useBusId(busId_);
+        Serial.printf("[INA226][bus %u][0x%02X] begin()\n", busId_, addr_);
         ina226_.init();
 
         // Set shunt resistor value
@@ -30,6 +34,8 @@ public:
     }
 
     util::Result<app::PowerReading, app::I2cError> read() {
+        hal::I2cSwitcher::instance().useBusId(busId_);
+        Serial.printf("[INA226][bus %u][0x%02X] read() start\n", busId_, addr_);
         app::PowerReading reading;
 
         reading.busVolts = ina226_.getBusVoltage_V();
@@ -40,6 +46,8 @@ public:
         reading.overflow = ina226_.overflow;
         reading.valid = true;
 
+        Serial.printf("[INA226][bus %u][0x%02X] V=%.3fV I=%.1fmA P=%.1fmW\n",
+                      busId_, addr_, reading.busVolts, reading.currentMilliamps, reading.powerMilliwatts);
         return util::Result<app::PowerReading, app::I2cError>::Ok(reading);
     }
 
@@ -50,6 +58,7 @@ public:
 private:
     TwoWire& wire_;
     uint8_t addr_;
+    uint8_t busId_ = 0;
     INA226_WE ina226_;
 };
 

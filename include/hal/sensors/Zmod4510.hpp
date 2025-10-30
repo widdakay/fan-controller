@@ -1,6 +1,8 @@
 #pragma once
 #include "ISensor.hpp"
 #include <Wire.h>
+#include <Arduino.h>
+#include "hal/I2cSwitcher.hpp"
 
 namespace hal {
 
@@ -13,12 +15,15 @@ public:
         : wire_(wire), addr_(addr), busId_(busId), initialized_(false) {}
 
     bool begin() override {
+        hal::I2cSwitcher::instance().useBusId(busId_);
+        Serial.printf("[ZMOD4510][bus %u][0x%02X] begin()\n", busId_, addr_);
         // TODO: Initialize ZMOD4510 according to datasheet
         // This requires specific I2C commands to configure the sensor
 
         // Check if device responds
         wire_.beginTransmission(addr_);
         if (wire_.endTransmission() != 0) {
+            Serial.printf("[ZMOD4510][bus %u][0x%02X] begin() FAILED\n", busId_, addr_);
             return false;
         }
 
@@ -31,6 +36,8 @@ public:
             return util::Result<app::Zmod4510Reading, app::SensorError>::Err(
                 app::SensorError::NotInitialized);
         }
+        hal::I2cSwitcher::instance().useBusId(busId_);
+        Serial.printf("[ZMOD4510][bus %u][0x%02X] read() start\n", busId_, addr_);
 
         // TODO: Implement actual ZMOD4510 reading protocol
         // The sensor requires specific I2C sequences to:
@@ -47,6 +54,7 @@ public:
         reading.no2Ppb = NAN;
         reading.valid = false;
 
+        Serial.printf("[ZMOD4510][bus %u][0x%02X] read() placeholder\n", busId_, addr_);
         return util::Result<app::Zmod4510Reading, app::SensorError>::Ok(reading);
     }
 
@@ -56,7 +64,7 @@ public:
 
     bool isConnected() const override {
         if (!initialized_) return false;
-
+        hal::I2cSwitcher::instance().useBusId(busId_);
         wire_.beginTransmission(addr_);
         return (wire_.endTransmission() == 0);
     }
