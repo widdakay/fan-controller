@@ -245,6 +245,9 @@ void Application::initializeServices_() {
     // Initialize telemetry
     telemetry_ = std::make_unique<services::TelemetryService>(*https_);
 
+    // Send boot report now that services are initialized
+    sendBootReportAfterInit_();
+
     Serial.println("Services initialized");
 }
 
@@ -284,8 +287,15 @@ void Application::sendBootReport_() {
     boot.firmwareVersion = FIRMWARE_VERSION;
 
     // Note: WiFi scan results will be captured during connect
-    if (wifi_) {
-        telemetry_->sendBootInfo(boot, wifi_->getLastScan());
+    // Boot info is sent after services are initialized (in initializeServices_)
+    // Store boot info for later sending
+    bootInfo_ = boot;
+}
+
+void Application::sendBootReportAfterInit_() {
+    if (wifi_ && telemetry_) {
+        telemetry_->sendBootInfo(bootInfo_, wifi_->getLastScan());
+        telemetry_->flushBatch();
     }
 }
 
@@ -341,6 +351,7 @@ void Application::sendHealthReport_() {
     // Send telemetry
     if (telemetry_) {
         telemetry_->sendHealthReport(health);
+        telemetry_->flushBatch();
     }
 }
 
@@ -377,9 +388,14 @@ void Application::readAndReportSensors_() {
     // Read environmental sensors
     // BME688
     for (auto& sensor : bme688Sensors_) {
+        uint32_t timestamp = millis();
         auto result = sensor->read();
         if (result.isOk() && telemetry_) {
             auto reading = result.value();
+            Serial.printf("[%lu] BME688 bus %u: T=%.2fC RH=%.2f%% P=%.0fPa Gas=%.0f\n",
+                         timestamp, sensor->getBusId(), reading.tempC, reading.humidity,
+                         reading.pressurePa, reading.gasResistance);
+            
             StaticJsonDocument<256> doc;
             JsonObject fields = doc.to<JsonObject>();
             fields["temp_c"] = reading.tempC;
@@ -387,7 +403,12 @@ void Application::readAndReportSensors_() {
             fields["pressure_pa"] = reading.pressurePa;
             fields["gas_resistance"] = reading.gasResistance;
 
+            Serial.printf("[%lu] BME688 bus %u: created fields object with %zu fields\n",
+                         millis(), sensor->getBusId(), fields.size());
+            
             telemetry_->sendSensorData("bme688", sensor->getBusId(), fields);
+        } else if (!result.isOk()) {
+            Serial.printf("[%lu] BME688 bus %u: read failed\n", timestamp, sensor->getBusId());
         }
     }
 
@@ -408,16 +429,25 @@ void Application::readAndReportSensors_() {
 
     // AHT20
     for (auto& sensor : aht20Sensors_) {
+        uint32_t timestamp = millis();
         auto result = sensor->read();
         if (result.isOk() && telemetry_) {
             auto reading = result.value();
+            Serial.printf("[%lu] AHT20 bus %u: T=%.2fC RH=%.2f%%\n",
+                         timestamp, sensor->getBusId(), reading.tempC, reading.humidity);
+            
             StaticJsonDocument<256> doc;
             JsonObject fields = doc.to<JsonObject>();
             fields["temp_c"] = reading.tempC;
             fields["humidity"] = reading.humidity;
 
+            Serial.printf("[%lu] AHT20 bus %u: created fields object with %zu fields\n",
+                         millis(), sensor->getBusId(), fields.size());
+
             telemetry_->sendSensorData("aht20", sensor->getBusId(), fields,
                                       reading.serialNumber);
+        } else if (!result.isOk()) {
+            Serial.printf("[%lu] AHT20 bus %u: read failed\n", timestamp, sensor->getBusId());
         }
     }
 
@@ -448,6 +478,12 @@ void Application::readAndReportSensors_() {
                 telemetry_->sendSensorData("zmod4510", sensor->getBusId(), fields);
             }
         }
+    }
+
+    // Flush batch after collecting all sensor readings
+    if (telemetry_) {
+        Serial.printf("[%lu] readAndReportSensors_: calling flushBatch\n", millis());
+        telemetry_->flushBatch();
     }
 }
 

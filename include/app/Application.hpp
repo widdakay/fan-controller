@@ -79,6 +79,11 @@ private:
     util::Thermistor thermistor_;
 
     // ========================================================================
+    // Stored Data
+    // ========================================================================
+    BootInfo bootInfo_;
+
+    // ========================================================================
     // Initialization Methods
     // ========================================================================
     void initializeHardware_();
@@ -92,6 +97,7 @@ private:
     // Task Handlers
     // ========================================================================
     void sendBootReport_();
+    void sendBootReportAfterInit_();
     void sendHealthReport_();
     void publishMqttStatus_();
     void readAndReportSensors_();
