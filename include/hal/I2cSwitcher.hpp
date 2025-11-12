@@ -32,22 +32,13 @@ public:
     TwoWire& wire() { return Wire; }
     // Convenience: select by logical busId (0 = onboard, 1..n external)
     void useBusId(uint8_t busId, uint32_t frequency = 100000) {
-        switch (busId) {
-            case 0:
-                use(config::PIN_I2C_ONBOARD_SDA, config::PIN_I2C_ONBOARD_SCL, frequency);
-                break;
-            case 1:
-                use(config::PIN_I2C1_SDA, config::PIN_I2C1_SCL, frequency);
-                break;
-            case 2:
-                use(config::PIN_I2C2_SDA, config::PIN_I2C2_SCL, frequency);
-                break;
-            case 3:
-                use(config::PIN_I2C3_SDA, config::PIN_I2C3_SCL, frequency);
-                break;
-            default:
-                use(config::PIN_I2C_ONBOARD_SDA, config::PIN_I2C_ONBOARD_SCL, frequency);
-                break;
+        auto [sda, scl] = config::getI2CPins(busId);
+        if (sda == -1 || scl == -1) {
+            // Invalid bus ID, fall back to onboard
+            auto [onboardSda, onboardScl] = config::getI2CPins(0);
+            use(onboardSda, onboardScl, frequency);
+        } else {
+            use(sda, scl, frequency);
         }
     }
 

@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cmath>
 #include <string>
+#include <array>
 
 namespace app {
 
@@ -168,6 +169,7 @@ struct WiFiScanResult {
     int8_t rssi;
     uint8_t channel;
     bool encrypted;
+    std::array<uint8_t, 6> bssid;    // Access point MAC address
 };
 
 } // namespace app

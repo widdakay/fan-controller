@@ -16,16 +16,19 @@ public:
     bool begin(float shuntResistorOhm = 0.001f) {
         hal::I2cSwitcher::instance().useBusId(busId_);
         Serial.printf("[INA226][bus %u][0x%02X] begin()\n", busId_, addr_);
-        ina226_.init();
+        if (!ina226_.init()) {
+            Serial.printf("[INA226][bus %u][0x%02X] begin() FAILED\n", busId_, addr_);
+            return false;
+        }
 
         // Set shunt resistor value
-        ina226_.setResistorRange(shuntResistorOhm, 3.0);  // 3A max expected current
+        ina226_.setResistorRange(shuntResistorOhm);  // 30A max expected current
 
         // Configure for continuous mode
         ina226_.setMeasureMode(INA226_CONTINUOUS);
 
         // Configure averaging for noise reduction
-        ina226_.setAverage(INA226_AVERAGE_16);
+        ina226_.setAverage(INA226_AVERAGE_512);
 
         // Set conversion time (bus and shunt)
         ina226_.setConversionTime(INA226_CONV_TIME_1100, INA226_CONV_TIME_1100);

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <array>
+#include <utility>
 #include "SecureConfig.hpp"
 
 namespace config {
@@ -34,6 +35,26 @@ inline constexpr int PIN_I2C4_SCL = 45;
 // Onboard I2C
 inline constexpr int PIN_I2C_ONBOARD_SDA = 1;
 inline constexpr int PIN_I2C_ONBOARD_SCL = 2;
+
+// I2C Bus ID to Pin Mapping
+// Returns {sda, scl} for a given bus ID (0 = onboard, 1-4 = external buses)
+// Returns {-1, -1} for invalid bus IDs
+constexpr std::pair<int, int> getI2CPins(uint8_t busId) {
+    switch (busId) {
+        case 0:
+            return {PIN_I2C_ONBOARD_SDA, PIN_I2C_ONBOARD_SCL};
+        case 1:
+            return {PIN_I2C1_SDA, PIN_I2C1_SCL};
+        case 2:
+            return {PIN_I2C2_SDA, PIN_I2C2_SCL};
+        case 3:
+            return {PIN_I2C3_SDA, PIN_I2C3_SCL};
+        case 4:
+            return {PIN_I2C4_SDA, PIN_I2C4_SCL};
+        default:
+            return {-1, -1};
+    }
+}
 
 // Motor controller
 inline constexpr int PIN_MOTOR_IN_A = 41;
@@ -109,15 +130,15 @@ inline constexpr uint32_t ONEWIRE_CONVERSION_MS = 800;
 
 // MQTT Configuration
 inline constexpr uint16_t MQTT_PORT = 1883;
-inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "home/fan1/power";
-inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "home/fan1/power/status";
+inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "lucect/fan1/power";
+inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "lucect/fan1/power/status";
 
 // HTTPS API Endpoints
 inline constexpr const char* API_INFLUXDB = "https://data.yoerik.com/particle/log";
 inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/particle/fw/update";
 
 // Device identification
-inline constexpr const char* DEVICE_NAME = "UnderHouseFan";
+inline constexpr const char* DEVICE_NAME = "LuceCTTestFan";
 
 // ============================================================================
 // Compile-time validation

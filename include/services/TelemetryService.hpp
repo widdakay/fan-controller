@@ -21,7 +21,7 @@ public:
         // Tags
         JsonObject tags = doc.createNestedObject("tags");
         tags["device"] = config::DEVICE_NAME;
-        tags["chip_id"] = String((uint32_t)ESP.getEfuseMac(), HEX);
+        tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
 
         // Fields
         JsonObject fields = doc.createNestedObject("fields");
@@ -81,11 +81,11 @@ public:
         // Tags
         JsonObject tags = doc.createNestedObject("tags");
         tags["device"] = config::DEVICE_NAME;
-        tags["chip_id"] = String((uint32_t)ESP.getEfuseMac(), HEX);
+        tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
         tags["bus_id"] = busId;
 
         if (serialNum != 0) {
-            tags["serial"] = String((uint32_t)serialNum, HEX);
+            tags["serial"] = String((uint64_t)serialNum, HEX);
         }
 
         // Copy fields
@@ -107,7 +107,7 @@ public:
 
             JsonObject tags = doc.createNestedObject("tags");
             tags["device"] = config::DEVICE_NAME;
-            tags["chip_id"] = String((uint32_t)ESP.getEfuseMac(), HEX);
+            tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
             tags["bus_id"] = reading.busId;
             tags["address"] = String((uint32_t)reading.address, HEX);
 
@@ -129,7 +129,7 @@ public:
 
         JsonObject tags = doc.createNestedObject("tags");
         tags["device"] = config::DEVICE_NAME;
-        tags["chip_id"] = String((uint32_t)boot.chipId, HEX);
+        tags["chip_id"] = String((uint64_t)boot.chipId, HEX);
 
         JsonObject fields = doc.createNestedObject("fields");
         fields["reset_reason"] = boot.resetReason;
