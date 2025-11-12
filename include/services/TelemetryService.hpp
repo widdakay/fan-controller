@@ -75,14 +75,7 @@ public:
         Serial.printf("[%u] sendSensorData: measurement=%s, busId=%u, doc capacity=%zu, doc usage=%zu\n", 
                      timestamp, measurement, busId, batchDoc_.capacity(), batchDoc_.memoryUsage());
         
-        // Check if we have enough capacity - flush earlier (75%) to avoid hitting the limit
-        if (batchDoc_.memoryUsage() > batchDoc_.capacity() * 0.75) {
-            Serial.printf("[%lu] sendSensorData: WARNING - document nearly full (%.1f%%), flushing batch\n", 
-                         millis(), (batchDoc_.memoryUsage() * 100.0f) / batchDoc_.capacity());
-            flushBatch();
-            // Recreate batchArray_ reference after flush to ensure it's valid
-            batchArray_ = batchDoc_.to<JsonArray>();
-        }
+
         
         // Check array size before creating object
         size_t arraySizeBefore = batchArray_.size();
