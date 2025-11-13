@@ -303,41 +303,36 @@ app::HardwareConfig Application::buildHardwareConfig_() const {
     config.ina226Initialized = (powerMonitor_ != nullptr);
     config.motorControllerInitialized = (motor_ != nullptr);
 
-    // ESP32 built-in sensors/features
-    config.internalTempSensorAvailable = true;  // ESP32-S3 has internal temp sensor
-    config.hallSensorAvailable = false;         // ESP32-S3 doesn't have hall sensor
-    config.builtinAdcChannels = 20;             // ESP32-S3 has 20 ADC channels total
-
     // I2C buses
     for (const auto& bus : i2cBuses_) {
         app::I2cBusInfo busInfo;
-        busInfo.busId = bus->getId();
-        auto [sda, scl] = config::getI2CPins(bus->getId());
+        busInfo.busId = bus->getBusId();
+        auto [sda, scl] = config::getI2CPins(bus->getBusId());
         busInfo.sdaPin = sda;
         busInfo.sclPin = scl;
 
         // Add sensors for this bus
         // BME688 sensors
         for (const auto& sensor : bme688Sensors_) {
-            if (sensor->getBusId() == bus->getId()) {
+            if (sensor->getBusId() == bus->getBusId()) {
                 busInfo.sensors.push_back({config::I2C_ADDR_BME688, "BME688", true});
             }
         }
         // Si7021 sensors
         for (const auto& sensor : si7021Sensors_) {
-            if (sensor->getBusId() == bus->getId()) {
+            if (sensor->getBusId() == bus->getBusId()) {
                 busInfo.sensors.push_back({0x40, "Si7021", true});
             }
         }
         // AHT20 sensors
         for (const auto& sensor : aht20Sensors_) {
-            if (sensor->getBusId() == bus->getId()) {
+            if (sensor->getBusId() == bus->getBusId()) {
                 busInfo.sensors.push_back({config::I2C_ADDR_AHT20, "AHT20", true});
             }
         }
         // ZMOD4510 sensors
         for (const auto& sensor : zmod4510Sensors_) {
-            if (sensor->getBusId() == bus->getId()) {
+            if (sensor->getBusId() == bus->getBusId()) {
                 busInfo.sensors.push_back({config::I2C_ADDR_ZMOD4510, "ZMOD4510", true});
             }
         }
@@ -348,7 +343,7 @@ app::HardwareConfig Application::buildHardwareConfig_() const {
     // OneWire buses
     for (const auto& bus : oneWireBuses_) {
         app::OneWireBusInfo busInfo;
-        busInfo.busId = bus->getId();
+        busInfo.busId = bus->getBusId();
         busInfo.pin = bus->getPin();
         busInfo.deviceCount = bus->getDeviceCount();
 

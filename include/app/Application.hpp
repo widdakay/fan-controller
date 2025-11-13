@@ -92,6 +92,7 @@ private:
     void connectWiFi_();
     void initializeServices_();
     void registerTasks_();
+    app::HardwareConfig buildHardwareConfig_() const;
 
     // ========================================================================
     // Task Handlers
