@@ -213,6 +213,26 @@ def process_temperatures():
     print(write_points)
     return 'Success'
 
+@app.route('/fw/update', methods=['GET', 'POST'])
+def process_firmware_update():
+    content = request.json
+    print('Firmware update check:', content)
+
+    # Extract chip ID and version
+    chip_id = content.get('ID', 'unknown')
+    version = content.get('ver', 'unknown')
+
+    print(f'Chip ID: {chip_id}, Version: {version}')
+
+    # TODO: Implement actual firmware version checking logic
+    # For now, always return false (no update available)
+    update_available = False
+
+    response = 'true' if update_available else 'false'
+    print(f'Update available: {update_available}')
+
+    return response
+
 @app.route('/log', methods=['GET', 'POST'])
 def process_url():
     content = request.json
@@ -227,7 +247,7 @@ def process_url():
     else:
         # Single-point format: single object
         json_body = [process_log_point(content)]
-    
+
     print('-'*30)
     print(request.data)
 
