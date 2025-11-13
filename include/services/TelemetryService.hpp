@@ -173,7 +173,7 @@ public:
     void sendBootInfo(const app::BootInfo& boot, const std::vector<app::WiFiScanResult>& wifiScan, const app::HardwareConfig& hwConfig) {
         JsonObject doc = batchArray_.createNestedObject();
 
-        doc["measurement"] = "ESP_Boot";
+        doc["measurement"] = "ESP_HW_CONF";
 
         JsonObject tags = doc.createNestedObject("tags");
         tags["device"] = config::DEVICE_NAME;
