@@ -233,6 +233,23 @@ def process_firmware_update():
 
     return response
 
+@app.route('/boot', methods=['GET', 'POST'])
+def process_boot():
+    content = request.json
+    print('Boot data received:', content)
+
+    # Boot data comes as a single data point (not an array like regular telemetry)
+    # Format it for InfluxDB
+    json_body = [process_log_point(content)]
+
+    print('Processed boot data:', json_body)
+
+    # Boot data goes to room_log database (same as other ESP data)
+    client.switch_database('room_log')
+    client.write_points(json_body)
+
+    return 'Success'
+
 @app.route('/log', methods=['GET', 'POST'])
 def process_url():
     content = request.json
