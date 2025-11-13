@@ -200,6 +200,11 @@ struct HardwareConfig {
     bool ina226Initialized;
     bool motorControllerInitialized;
 
+    // ESP32 built-in sensors/features
+    bool internalTempSensorAvailable;
+    bool hallSensorAvailable;
+    uint8_t builtinAdcChannels;
+
     // I2C buses
     std::vector<I2cBusInfo> i2cBuses;
 

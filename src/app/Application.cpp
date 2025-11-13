@@ -303,6 +303,11 @@ app::HardwareConfig Application::buildHardwareConfig_() const {
     config.ina226Initialized = (powerMonitor_ != nullptr);
     config.motorControllerInitialized = (motor_ != nullptr);
 
+    // ESP32 built-in sensors/features
+    config.internalTempSensorAvailable = true;  // ESP32-S3 has internal temp sensor
+    config.hallSensorAvailable = false;         // ESP32-S3 doesn't have hall sensor
+    config.builtinAdcChannels = 20;             // ESP32-S3 has 20 ADC channels total
+
     // I2C buses
     for (const auto& bus : i2cBuses_) {
         app::I2cBusInfo busInfo;

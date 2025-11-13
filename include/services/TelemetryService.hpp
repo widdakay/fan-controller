@@ -211,6 +211,12 @@ public:
         onboard["ina226"] = hwConfig.ina226Initialized;
         onboard["motor_controller"] = hwConfig.motorControllerInitialized;
 
+        // ESP32 built-in sensors
+        JsonObject builtin = esp32.createNestedObject("builtin_sensors");
+        builtin["internal_temperature"] = hwConfig.internalTempSensorAvailable;
+        builtin["hall_effect"] = hwConfig.hallSensorAvailable;
+        builtin["adc_channels"] = hwConfig.builtinAdcChannels;
+
         // I2C buses
         JsonObject i2cBuses = esp32.createNestedObject("i2c_buses");
         for (const auto& bus : hwConfig.i2cBuses) {
