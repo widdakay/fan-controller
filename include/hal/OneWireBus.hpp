@@ -66,6 +66,8 @@ public:
 
     uint8_t getDeviceCount() const { return deviceCount_; }
     uint8_t getBusId() const { return busId_; }
+    uint8_t getPin() const { return pin_; }
+    const std::vector<uint64_t>& getDeviceAddresses() const { return addresses_; }
 
 private:
     uint8_t pin_;

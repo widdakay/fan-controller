@@ -1,4 +1,5 @@
 #include "app/Application.hpp"
+#include "app/Application.hpp"
 
 namespace app {
 
@@ -292,9 +293,76 @@ void Application::sendBootReport_() {
     bootInfo_ = boot;
 }
 
+app::HardwareConfig Application::buildHardwareConfig_() const {
+    app::HardwareConfig config;
+    config.chipId = ESP.getEfuseMac();
+    config.firmwareVersion = FIRMWARE_VERSION;
+
+    // Onboard hardware status
+    config.ads1115Initialized = (adc_ != nullptr);
+    config.ina226Initialized = (powerMonitor_ != nullptr);
+    config.motorControllerInitialized = (motor_ != nullptr);
+
+    // I2C buses
+    for (const auto& bus : i2cBuses_) {
+        app::I2cBusInfo busInfo;
+        busInfo.busId = bus->getId();
+        auto [sda, scl] = config::getI2CPins(bus->getId());
+        busInfo.sdaPin = sda;
+        busInfo.sclPin = scl;
+
+        // Add sensors for this bus
+        // BME688 sensors
+        for (const auto& sensor : bme688Sensors_) {
+            if (sensor->getBusId() == bus->getId()) {
+                busInfo.sensors.push_back({config::I2C_ADDR_BME688, "BME688", true});
+            }
+        }
+        // Si7021 sensors
+        for (const auto& sensor : si7021Sensors_) {
+            if (sensor->getBusId() == bus->getId()) {
+                busInfo.sensors.push_back({0x40, "Si7021", true});
+            }
+        }
+        // AHT20 sensors
+        for (const auto& sensor : aht20Sensors_) {
+            if (sensor->getBusId() == bus->getId()) {
+                busInfo.sensors.push_back({config::I2C_ADDR_AHT20, "AHT20", true});
+            }
+        }
+        // ZMOD4510 sensors
+        for (const auto& sensor : zmod4510Sensors_) {
+            if (sensor->getBusId() == bus->getId()) {
+                busInfo.sensors.push_back({config::I2C_ADDR_ZMOD4510, "ZMOD4510", true});
+            }
+        }
+
+        config.i2cBuses.push_back(busInfo);
+    }
+
+    // OneWire buses
+    for (const auto& bus : oneWireBuses_) {
+        app::OneWireBusInfo busInfo;
+        busInfo.busId = bus->getId();
+        busInfo.pin = bus->getPin();
+        busInfo.deviceCount = bus->getDeviceCount();
+
+        // Add sensors (DS18B20 devices)
+        auto addresses = bus->getDeviceAddresses();
+        for (uint64_t addr : addresses) {
+            busInfo.sensors.push_back({addr, true});
+        }
+
+        config.oneWireBuses.push_back(busInfo);
+    }
+
+    return config;
+}
+
 void Application::sendBootReportAfterInit_() {
     if (wifi_ && telemetry_) {
-        telemetry_->sendBootInfo(bootInfo_, wifi_->getLastScan());
+        auto hwConfig = buildHardwareConfig_();
+        telemetry_->sendBootInfo(bootInfo_, wifi_->getLastScan(), hwConfig);
         telemetry_->flushBatch();
     }
 }

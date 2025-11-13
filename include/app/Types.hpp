@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 #include <array>
+#include <vector>
 
 namespace app {
 
@@ -158,6 +159,52 @@ struct BootInfo {
     uint32_t freeSketchSpace = 0;
     uint32_t heapSize = 0;
     const char* firmwareVersion = "";
+};
+
+// ============================================================================
+// Hardware Configuration
+// ============================================================================
+
+struct I2cSensorInfo {
+    uint8_t address;
+    const char* type;
+    bool initialized;
+};
+
+struct I2cBusInfo {
+    uint8_t busId;
+    uint8_t sdaPin;
+    uint8_t sclPin;
+    std::vector<I2cSensorInfo> sensors;
+};
+
+struct OneWireSensorInfo {
+    uint64_t address;
+    bool valid;
+};
+
+struct OneWireBusInfo {
+    uint8_t busId;
+    uint8_t pin;
+    uint8_t deviceCount;
+    std::vector<OneWireSensorInfo> sensors;
+};
+
+struct HardwareConfig {
+    // ESP32 info
+    uint64_t chipId;
+    const char* firmwareVersion;
+
+    // Onboard hardware
+    bool ads1115Initialized;
+    bool ina226Initialized;
+    bool motorControllerInitialized;
+
+    // I2C buses
+    std::vector<I2cBusInfo> i2cBuses;
+
+    // OneWire buses
+    std::vector<OneWireBusInfo> oneWireBuses;
 };
 
 // ============================================================================

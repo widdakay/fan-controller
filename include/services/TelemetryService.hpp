@@ -170,7 +170,7 @@ public:
         }
     }
 
-    void sendBootInfo(const app::BootInfo& boot, const std::vector<app::WiFiScanResult>& wifiScan) {
+    void sendBootInfo(const app::BootInfo& boot, const std::vector<app::WiFiScanResult>& wifiScan, const app::HardwareConfig& hwConfig) {
         JsonObject doc = batchArray_.createNestedObject();
 
         doc["measurement"] = "ESP_Boot";
@@ -196,6 +196,50 @@ public:
             wifiList += "),";
         }
         fields["wifi_list"] = wifiList.c_str();
+
+        // Add hardware configuration as JSON tree
+        JsonObject hwConfigJson = fields.createNestedObject("hardware_config");
+
+        // ESP32 root node
+        JsonObject esp32 = hwConfigJson.createNestedObject("esp32");
+        esp32["chip_id"] = String((uint64_t)hwConfig.chipId, HEX);
+        esp32["firmware_version"] = hwConfig.firmwareVersion;
+
+        // Onboard hardware
+        JsonObject onboard = esp32.createNestedObject("onboard");
+        onboard["ads1115"] = hwConfig.ads1115Initialized;
+        onboard["ina226"] = hwConfig.ina226Initialized;
+        onboard["motor_controller"] = hwConfig.motorControllerInitialized;
+
+        // I2C buses
+        JsonObject i2cBuses = esp32.createNestedObject("i2c_buses");
+        for (const auto& bus : hwConfig.i2cBuses) {
+            JsonObject busJson = i2cBuses.createNestedObject(String(bus.busId));
+            busJson["sda_pin"] = bus.sdaPin;
+            busJson["scl_pin"] = bus.sclPin;
+
+            JsonObject sensors = busJson.createNestedObject("sensors");
+            for (const auto& sensor : bus.sensors) {
+                JsonObject sensorJson = sensors.createNestedObject(String(sensor.address, HEX));
+                sensorJson["type"] = sensor.type;
+                sensorJson["initialized"] = sensor.initialized;
+            }
+        }
+
+        // OneWire buses
+        JsonObject oneWireBuses = esp32.createNestedObject("onewire_buses");
+        for (const auto& bus : hwConfig.oneWireBuses) {
+            JsonObject busJson = oneWireBuses.createNestedObject(String(bus.busId));
+            busJson["pin"] = bus.pin;
+            busJson["device_count"] = bus.deviceCount;
+
+            JsonArray sensors = busJson.createNestedArray("sensors");
+            for (const auto& sensor : bus.sensors) {
+                JsonObject sensorJson = sensors.createNestedObject();
+                sensorJson["address"] = String((uint64_t)sensor.address, HEX);
+                sensorJson["valid"] = sensor.valid;
+            }
+        }
     }
 
     void flushBatch() {
