@@ -238,9 +238,17 @@ def process_boot():
     content = request.json
     print('Boot data received:', content)
 
-    # Boot data comes as a single data point (not an array like regular telemetry)
-    # Format it for InfluxDB
-    json_body = [process_log_point(content)]
+    # Handle nested payload format (only if content is a dict)
+    if isinstance(content, dict) and content.get('decoded', {}).get('payload'):
+        content = content['decoded']['payload']
+
+    # Check if this is a multi-point format (array of data points)
+    if isinstance(content, list):
+        # Multi-point format: array of objects
+        json_body = [process_log_point(point) for point in content]
+    else:
+        # Single-point format: single object
+        json_body = [process_log_point(content)]
 
     print('Processed boot data:', json_body)
 
