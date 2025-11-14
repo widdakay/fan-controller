@@ -141,7 +141,7 @@ public:
             // Copy by value type - use serialized() for all numeric types to force
             // decimal notation and prevent InfluxDB type conflicts
             // Exception: Some fields should remain as integers
-            bool keepAsInteger = (keyCopy == "gas_resistance" || keyCopy == "resistance");
+            bool keepAsInteger = (keyCopy == "gas_resistance" || keyCopy == "pressure_pa");
 
             char numStr[32];
             if (value.is<float>() || value.is<double>()) {
@@ -244,14 +244,14 @@ public:
         tags["chip_id"] = String((uint64_t)boot.chipId, HEX);
 
         JsonObject fields = doc.createNestedObject("fields");
-        fields["reset_reason"] = boot.resetReason;
+        fields["reset_reason"] = String(boot.resetReason);  // Copy string
         fields["sketch_size"] = boot.sketchSize;
         fields["free_sketch_space"] = boot.freeSketchSpace;
         fields["heap_size"] = boot.heapSize;
-        fields["firmware_version"] = boot.firmwareVersion;
+        fields["firmware_version"] = String(boot.firmwareVersion);  // Copy string
         fields["wifi_networks_found"] = wifiScan.size();
 
-        // Add WiFi scan results
+        // Add WiFi scan results - ArduinoJson will copy the String
         String wifiList = "";
         for (const auto& wifi : wifiScan) {
             wifiList += wifi.ssid.c_str();
@@ -259,7 +259,7 @@ public:
             wifiList += String(wifi.rssi);
             wifiList += "),";
         }
-        fields["wifi_list"] = wifiList.c_str();
+        fields["wifi_list"] = wifiList;  // Pass String object, not c_str()
     }
 
     void flushBatch() {
