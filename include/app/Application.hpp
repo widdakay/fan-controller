@@ -2,23 +2,17 @@
 #include "Config.hpp"
 #include "Tasks.hpp"
 #include "Types.hpp"
-#include "hal/Ads1115.hpp"
-#include "hal/Ina226.hpp"
 #include "hal/MotorController.hpp"
 #include "hal/LedController.hpp"
 #include "hal/I2cBus.hpp"
 #include "hal/OneWireBus.hpp"
-#include "hal/sensors/Bme688.hpp"
-#include "hal/sensors/Si7021.hpp"
-#include "hal/sensors/Aht20.hpp"
-#include "hal/sensors/Zmod4510.hpp"
+#include "hal/sensors/AllSensors.hpp"
 #include "services/WiFiManager.hpp"
 #include "services/MqttClient.hpp"
 #include "services/HttpsClient.hpp"
 #include "services/OtaManager.hpp"
 #include "services/TelemetryService.hpp"
 #include "services/WatchdogService.hpp"
-#include "util/Thermistor.hpp"
 #include "util/Timer.hpp"
 #include <memory>
 #include <vector>
@@ -41,18 +35,14 @@ private:
     // Hardware Components
     // ========================================================================
     std::unique_ptr<hal::LedController> leds_;
-    std::unique_ptr<hal::Ads1115> adc_;
-    std::unique_ptr<hal::Ina226> powerMonitor_;
     std::unique_ptr<hal::MotorController> motor_;
 
-    // I2C buses (external sensors)
-    std::vector<std::unique_ptr<hal::I2cBus>> i2cBuses_;
-    std::vector<std::unique_ptr<hal::Bme688>> bme688Sensors_;
-    std::vector<std::unique_ptr<hal::Si7021>> si7021Sensors_;
-    std::vector<std::unique_ptr<hal::Aht20>> aht20Sensors_;
-    std::vector<std::unique_ptr<hal::Zmod4510>> zmod4510Sensors_;
+    // Unified sensor management
+    // All I2C sensors (including ADC, power monitor, environmental sensors)
+    // are stored in a single heterogeneous collection
+    std::vector<std::unique_ptr<hal::ISensorInstance>> sensors_;
 
-    // OneWire buses
+    // OneWire buses (managed separately due to different protocol)
     std::vector<std::unique_ptr<hal::OneWireBus>> oneWireBuses_;
     util::Timer oneWireConversionTimer_;
     bool oneWireConversionStarted_ = false;
@@ -74,11 +64,6 @@ private:
     TaskScheduler scheduler_;
 
     // ========================================================================
-    // Utilities
-    // ========================================================================
-    util::Thermistor thermistor_;
-
-    // ========================================================================
     // Stored Data
     // ========================================================================
     BootInfo bootInfo_;
@@ -87,7 +72,7 @@ private:
     // Initialization Methods
     // ========================================================================
     void initializeHardware_();
-    void initializeExternalSensors_();
+    void discoverAllSensors_();
     void initializeOneWire_();
     void connectWiFi_();
     void initializeServices_();

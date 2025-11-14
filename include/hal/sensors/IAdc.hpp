@@ -16,6 +16,9 @@ public:
     // Read voltage from a channel
     virtual util::Result<float, app::I2cError> readVolts(uint8_t channel) = 0;
 
+    // Check if ADC is connected
+    virtual bool isConnected() const = 0;
+
     // Read all channels at once (optional optimization)
     virtual app::AdcReading readAll() {
         app::AdcReading reading;
