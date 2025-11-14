@@ -128,17 +128,34 @@ inline constexpr uint32_t ONEWIRE_CONVERSION_MS = 800;
 // WiFi credentials and MQTT server are defined in SecureConfig.hpp
 // Copy SecureConfig.hpp.example to SecureConfig.hpp and update with your credentials
 
-// MQTT Configuration
-inline constexpr uint16_t MQTT_PORT = 1883;
-inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "lucect/fan1/power";
-inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "lucect/fan1/power/status";
-
 // HTTPS API Endpoints
 inline constexpr const char* API_INFLUXDB = "https://data.yoerik.com/particle/log";
 inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/particle/fw/update";
 
+// // MQTT Configuration
+// inline constexpr uint16_t MQTT_PORT = 1883;
+// inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "home/fan1/power";
+// inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "home/fan1/power/status";
+
+// // Device identification
+// inline constexpr const char* DEVICE_NAME = "UnderHouseFan";
+
+// // MQTT Configuration
+// inline constexpr uint16_t MQTT_PORT = 1883;
+// inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "lucect/fan1/power";
+// inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "lucect/fan1/power/status";
+
+// // Device identification
+// inline constexpr const char* DEVICE_NAME = "LuceCTTestFan";
+
+
+// MQTT Configuration
+inline constexpr uint16_t MQTT_PORT = 1883;
+inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard/fan1/power";
+inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard/fan1/power/status";
+
 // Device identification
-inline constexpr const char* DEVICE_NAME = "LuceCTTestFan";
+inline constexpr const char* DEVICE_NAME = "TestBoard";
 
 // ============================================================================
 // Compile-time validation

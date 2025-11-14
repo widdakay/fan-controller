@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(pio run:*)",
+      "Bash(pio pkg search:*)",
+      "Bash(rmdir:*)",
+      "Bash(tree:*)",
+      "Bash(pio device list:*)",
+      "Bash(pio test:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

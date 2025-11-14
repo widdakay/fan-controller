@@ -29,35 +29,48 @@ public:
         JsonObject fields = doc.createNestedObject("fields");
         fields["arduino_millis"] = health.uptimeMs;
 
-        // Temperatures
+        // Temperatures - use serialized() to force float notation
+        char tempStr[16];
         if (health.motorTemp.inRange) {
-            fields["motor_temp_c"] = health.motorTemp.tempC;
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.motorTemp.tempC);
+            fields["motor_temp_c"] = serialized(tempStr);
         }
         if (health.mcuExternalTemp.inRange) {
-            fields["mcu_external_temp_c"] = health.mcuExternalTemp.tempC;
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.mcuExternalTemp.tempC);
+            fields["mcu_external_temp_c"] = serialized(tempStr);
         }
         if (std::isfinite(health.mcuInternalTempC)) {
-            fields["mcu_internal_temp_c"] = health.mcuInternalTempC;
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.mcuInternalTempC);
+            fields["mcu_internal_temp_c"] = serialized(tempStr);
         }
 
-        // Power rails
+        // Power rails - use serialized() to force float notation
         if (std::isfinite(health.rail3v3)) {
-            fields["rail_3v3"] = health.rail3v3;
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.rail3v3);
+            fields["rail_3v3"] = serialized(tempStr);
         }
         if (std::isfinite(health.rail5v)) {
-            fields["rail_5v"] = health.rail5v;
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.rail5v);
+            fields["rail_5v"] = serialized(tempStr);
         }
 
-        // Input power
+        // Input power - use serialized() to force float notation
         if (health.inputPower.valid) {
-            fields["v_in"] = health.inputPower.busVolts;
-            fields["i_in"] = health.inputPower.currentMilliamps / 1000.0f;
-            fields["v_shunt"] = health.inputPower.shuntMillivolts;
-            fields["p_in"] = health.inputPower.powerMilliwatts / 1000.0f;
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.inputPower.busVolts);
+            fields["v_in"] = serialized(tempStr);
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.inputPower.currentMilliamps / 1000.0f);
+            fields["i_in"] = serialized(tempStr);
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.inputPower.shuntMillivolts);
+            fields["v_shunt"] = serialized(tempStr);
+            snprintf(tempStr, sizeof(tempStr), "%.6f", health.inputPower.powerMilliwatts / 1000.0f);
+            fields["p_in"] = serialized(tempStr);
         }
 
-        // Motor status
-        fields["motor_duty"] = float(health.motor.dutyCycle);  // print 0 as 0.0 not 0
+        // Motor status - use serialized() with formatted string to force float type
+        // This prevents ArduinoJson from optimizing 0.0 to integer 0
+        char dutyStr[16];
+        snprintf(dutyStr, sizeof(dutyStr), "%.6f", health.motor.dutyCycle);
+        fields["motor_duty"] = serialized(dutyStr);
         fields["motor_direction"] = health.motor.directionForward ? 1 : 0;
         fields["motor_en_a"] = health.motor.enAEnabled ? 1 : 0;
         fields["motor_en_b"] = health.motor.enBEnabled ? 1 : 0;
@@ -110,35 +123,50 @@ public:
         }
 
         // Copy fields - need to copy from source JsonObject to new one
-        // IMPORTANT: Copy values immediately while source document is still in scope
+        // IMPORTANT: Must copy both keys and values as source document may be destroyed
         JsonObject docFields = doc.createNestedObject("fields");
-        
+
         size_t fieldCount = 0;
         for (JsonPair kv : fields) {
-            const char* key = kv.key().c_str();
+            // CRITICAL: Make a copy of the key string to prevent dangling pointer
+            // when source document goes out of scope
+            String keyCopy = kv.key().c_str();
             JsonVariantConst value = kv.value();
-            
-            // Copy by value type to ensure we get actual values, not references
-            if (value.is<float>()) {
-                docFields[key] = value.as<float>();
+
+            // Copy by value type - use serialized() for all numeric types to force
+            // decimal notation and prevent InfluxDB type conflicts
+            char numStr[32];
+            if (value.is<float>() || value.is<double>()) {
+                // Float/double - format with decimals
+                snprintf(numStr, sizeof(numStr), "%.6f", value.as<float>());
+                docFields[keyCopy] = serialized(numStr);
             } else if (value.is<int>()) {
-                docFields[key] = value.as<int>();
+                // Integer - format as float to maintain type consistency
+                snprintf(numStr, sizeof(numStr), "%d.0", value.as<int>());
+                docFields[keyCopy] = serialized(numStr);
             } else if (value.is<unsigned int>()) {
-                docFields[key] = value.as<unsigned int>();
+                snprintf(numStr, sizeof(numStr), "%u.0", value.as<unsigned int>());
+                docFields[keyCopy] = serialized(numStr);
             } else if (value.is<long>()) {
-                docFields[key] = value.as<long>();
+                snprintf(numStr, sizeof(numStr), "%ld.0", value.as<long>());
+                docFields[keyCopy] = serialized(numStr);
             } else if (value.is<unsigned long>()) {
-                docFields[key] = value.as<unsigned long>();
-            } else if (value.is<double>()) {
-                docFields[key] = value.as<double>();
+                snprintf(numStr, sizeof(numStr), "%lu.0", value.as<unsigned long>());
+                docFields[keyCopy] = serialized(numStr);
+            } else if (value.is<bool>()) {
+                // Booleans as integers (0 or 1)
+                docFields[keyCopy] = value.as<bool>() ? 1 : 0;
+            } else if (value.is<const char*>()) {
+                // String values also need to be copied
+                docFields[keyCopy] = String(value.as<const char*>());
             } else {
                 // Fallback: try direct assignment
-                docFields[key] = value;
+                docFields[keyCopy] = value;
             }
             fieldCount++;
-            Serial.printf("[%lu] sendSensorData: copied field %s\n", millis(), key);
+            Serial.printf("[%lu] sendSensorData: copied field %s\n", millis(), keyCopy.c_str());
         }
-        
+
         Serial.printf("[%lu] sendSensorData: copied %zu fields from source\n", millis(), fieldCount);
         
         // Always add timestamp - ensures at least one field (InfluxDB requirement)
@@ -166,7 +194,9 @@ public:
 
             JsonObject fields = doc.createNestedObject("fields");
             fields["arduino_millis"] = timestamp;
-            fields["temp_c"] = reading.tempC;
+            char tempStr[16];
+            snprintf(tempStr, sizeof(tempStr), "%.6f", reading.tempC);
+            fields["temp_c"] = serialized(tempStr);
         }
     }
 
@@ -220,6 +250,7 @@ public:
 
         size_t batchSize = arraySize;
         String jsonData;
+        // Force floating point precision to ensure 0.0 doesn't serialize as 0
         serializeJson(batchArray_, jsonData);
 
         Serial.printf("[%lu] flushBatch: serialized %zu bytes, %zu points\n", millis(), jsonData.length(), batchSize);
