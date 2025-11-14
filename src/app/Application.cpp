@@ -383,12 +383,17 @@ void Application::readAndReportSensors_() {
 
                 // Send to telemetry with sensor's measurement name
                 auto serial = sensor->getSerial();
+                auto sensorNameOpt = sensor->getSensorName();
+
+                // Get sensor name as String (empty if not present)
+                String sensorNameStr = sensorNameOpt.has_value() ? sensorNameOpt.value() : String();
+
                 if (serial.has_value()) {
                     telemetry_->sendSensorData(sensor->getMeasurementName(),
-                                             sensor->getBusId(), fields, serial.value());
+                                             sensor->getBusId(), fields, serial.value(), sensorNameStr);
                 } else {
                     telemetry_->sendSensorData(sensor->getMeasurementName(),
-                                             sensor->getBusId(), fields);
+                                             sensor->getBusId(), fields, 0, sensorNameStr);
                 }
             } else {
                 Serial.printf("[%lu] %s bus %u: JSON parse failed: %s\n",

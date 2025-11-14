@@ -47,6 +47,7 @@ public:
     uint8_t getBusId() const override { return busId_; }
     uint8_t getAddress() const override { return adcAddress_; }
     bool isConnected() const override { return adc_ && adc_->isConnected(); }
+    std::optional<String> getSensorName() const override { return String(name_); }
 
     util::Result<String, app::SensorError> readAsJson() override {
         if (!adc_) {
@@ -70,9 +71,8 @@ public:
         float tempC = thermistor_.tempC_from_R(resistance);
         bool inRange = thermistor_.isValidRange(tempC);
 
-        // Format as JSON
-        String json = "{\"name\":\"" + String(name_) + "\"";
-        json += ",\"temp_c\":" + String(tempC, 2);
+        // Format as JSON (name is now sent as a tag via getSensorName())
+        String json = "{\"temp_c\":" + String(tempC, 2);
         json += ",\"resistance\":" + String(resistance, 0);
         json += ",\"voltage\":" + String(voltage, 3);
         json += ",\"in_range\":" + String(inRange ? "true" : "false");
@@ -128,6 +128,7 @@ public:
     uint8_t getBusId() const override { return busId_; }
     uint8_t getAddress() const override { return adcAddress_; }
     bool isConnected() const override { return adc_ && adc_->isConnected(); }
+    std::optional<String> getSensorName() const override { return String(name_); }
 
     util::Result<String, app::SensorError> readAsJson() override {
         if (!adc_) {
@@ -142,9 +143,8 @@ public:
 
         float voltage = voltResult.value() * dividerRatio_;
 
-        // Format as JSON
-        String json = "{\"name\":\"" + String(name_) + "\"";
-        json += ",\"voltage\":" + String(voltage, 3);
+        // Format as JSON (name is now sent as a tag via getSensorName())
+        String json = "{\"voltage\":" + String(voltage, 3);
         json += "}";
 
         return util::Result<String, app::SensorError>::Ok(json);

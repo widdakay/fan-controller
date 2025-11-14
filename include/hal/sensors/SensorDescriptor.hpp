@@ -76,6 +76,9 @@ public:
     // Get optional serial number
     virtual std::optional<uint64_t> getSerial() const { return std::nullopt; }
 
+    // Get optional sensor name (for tags like rail name, thermistor name, etc.)
+    virtual std::optional<String> getSensorName() const { return std::nullopt; }
+
     // Read sensor and format as JSON fields string
     // Returns Result with JSON string like: {"temp_c": 25.3, "humidity": 45.2}
     virtual util::Result<String, app::SensorError> readAsJson() = 0;

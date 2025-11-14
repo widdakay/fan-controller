@@ -83,10 +83,10 @@ public:
     }
 
     void sendSensorData(const char* measurement, uint8_t busId,
-                       const JsonObject& fields, uint64_t serialNum = 0) {
+                       const JsonObject& fields, uint64_t serialNum = 0, const String& sensorName = String()) {
         uint32_t timestamp = millis();
-        Serial.printf("[%u] sendSensorData: measurement=%s, busId=%u, doc capacity=%zu, doc usage=%zu\n", 
-                     timestamp, measurement, busId, batchDoc_.capacity(), batchDoc_.memoryUsage());
+        Serial.printf("[%u] sendSensorData: measurement=%s, busId=%u, sensorName=%s, doc capacity=%zu, doc usage=%zu\n",
+                     timestamp, measurement, busId, sensorName.isEmpty() ? "null" : sensorName.c_str(), batchDoc_.capacity(), batchDoc_.memoryUsage());
         
 
         
@@ -122,6 +122,11 @@ public:
             tags["serial"] = String((uint64_t)serialNum, HEX);
         }
 
+        if (!sensorName.isEmpty()) {
+            tags["sensor_name"] = sensorName;  // String object will be copied by ArduinoJson
+            Serial.printf("[%lu] sendSensorData: set sensor_name tag to '%s'\n", millis(), sensorName.c_str());
+        }
+
         // Copy fields - need to copy from source JsonObject to new one
         // IMPORTANT: Must copy both keys and values as source document may be destroyed
         JsonObject docFields = doc.createNestedObject("fields");
@@ -135,24 +140,53 @@ public:
 
             // Copy by value type - use serialized() for all numeric types to force
             // decimal notation and prevent InfluxDB type conflicts
+            // Exception: Some fields should remain as integers
+            bool keepAsInteger = (keyCopy == "gas_resistance" || keyCopy == "resistance");
+
             char numStr[32];
             if (value.is<float>() || value.is<double>()) {
-                // Float/double - format with decimals
-                snprintf(numStr, sizeof(numStr), "%.6f", value.as<float>());
-                docFields[keyCopy] = serialized(numStr);
+                if (keepAsInteger) {
+                    // Keep as integer (no decimal point)
+                    snprintf(numStr, sizeof(numStr), "%d", (int)value.as<float>());
+                    docFields[keyCopy] = serialized(numStr);
+                } else {
+                    // Float/double - format with decimals
+                    snprintf(numStr, sizeof(numStr), "%.6f", value.as<float>());
+                    docFields[keyCopy] = serialized(numStr);
+                }
             } else if (value.is<int>()) {
-                // Integer - format as float to maintain type consistency
-                snprintf(numStr, sizeof(numStr), "%d.0", value.as<int>());
-                docFields[keyCopy] = serialized(numStr);
+                if (keepAsInteger) {
+                    // Keep as integer
+                    docFields[keyCopy] = value.as<int>();
+                } else {
+                    // Integer - format as float to maintain type consistency
+                    snprintf(numStr, sizeof(numStr), "%d.0", value.as<int>());
+                    docFields[keyCopy] = serialized(numStr);
+                }
             } else if (value.is<unsigned int>()) {
-                snprintf(numStr, sizeof(numStr), "%u.0", value.as<unsigned int>());
-                docFields[keyCopy] = serialized(numStr);
+                if (keepAsInteger) {
+                    // Keep as integer
+                    docFields[keyCopy] = value.as<unsigned int>();
+                } else {
+                    snprintf(numStr, sizeof(numStr), "%u.0", value.as<unsigned int>());
+                    docFields[keyCopy] = serialized(numStr);
+                }
             } else if (value.is<long>()) {
-                snprintf(numStr, sizeof(numStr), "%ld.0", value.as<long>());
-                docFields[keyCopy] = serialized(numStr);
+                if (keepAsInteger) {
+                    // Keep as integer
+                    docFields[keyCopy] = value.as<long>();
+                } else {
+                    snprintf(numStr, sizeof(numStr), "%ld.0", value.as<long>());
+                    docFields[keyCopy] = serialized(numStr);
+                }
             } else if (value.is<unsigned long>()) {
-                snprintf(numStr, sizeof(numStr), "%lu.0", value.as<unsigned long>());
-                docFields[keyCopy] = serialized(numStr);
+                if (keepAsInteger) {
+                    // Keep as integer
+                    docFields[keyCopy] = value.as<unsigned long>();
+                } else {
+                    snprintf(numStr, sizeof(numStr), "%lu.0", value.as<unsigned long>());
+                    docFields[keyCopy] = serialized(numStr);
+                }
             } else if (value.is<bool>()) {
                 // Booleans as integers (0 or 1)
                 docFields[keyCopy] = value.as<bool>() ? 1 : 0;
@@ -254,6 +288,7 @@ public:
         serializeJson(batchArray_, jsonData);
 
         Serial.printf("[%lu] flushBatch: serialized %zu bytes, %zu points\n", millis(), jsonData.length(), batchSize);
+        Serial.printf("[%lu] flushBatch: JSON data: %s\n", millis(), jsonData.c_str());
 
         // Clear the batch for next use before sending (in case send fails)
         batchArray_.clear();

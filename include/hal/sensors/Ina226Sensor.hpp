@@ -14,7 +14,7 @@ namespace hal {
 inline SensorDescriptor getIna226Descriptor() {
     SensorDescriptor desc;
     desc.typeName = "INA226";
-    desc.measurementName = "power";
+    desc.measurementName = "ina226";
     desc.i2cAddresses = {0x40, 0x41, 0x44, 0x45}; // Address depends on A0/A1 pins
     desc.supportsPostProcessing = false;
 
@@ -24,7 +24,7 @@ inline SensorDescriptor getIna226Descriptor() {
             return nullptr;
         }
         return std::make_unique<ConcreteSensorInstance<Ina226, app::PowerReading>>(
-            std::move(ina), "INA226", "power", bus.getBusId(), addr
+            std::move(ina), "INA226", "ina226", bus.getBusId(), addr
         );
     };
 
