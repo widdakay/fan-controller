@@ -1,4 +1,6 @@
 #include "app/Application.hpp"
+#include <map>
+#include <ArduinoJson.h>
 
 namespace app {
 
@@ -9,8 +11,7 @@ Application::Application()
           config::PIN_MOTOR_EN_A, config::PIN_MOTOR_EN_B,
           config::PIN_MOTOR_PWM, config::MOTOR_PWM_FREQ_HZ,
           config::MOTOR_PWM_BITS)),
-      oneWireConversionTimer_(config::ONEWIRE_CONVERSION_MS),
-      thermistor_(config::THERMISTOR_SERIES_R)
+      oneWireConversionTimer_(config::ONEWIRE_CONVERSION_MS)
 {}
 
 void Application::setup() {
@@ -68,20 +69,9 @@ void Application::loop() {
 void Application::initializeHardware_() {
     Serial.println("Initializing hardware...");
 
-    // Initialize shared I2C on onboard pins first
-    hal::I2cSwitcher::instance().use(config::PIN_I2C_ONBOARD_SDA, config::PIN_I2C_ONBOARD_SCL);
-
-    // Initialize ADS1115
-    adc_ = std::make_unique<hal::Ads1115>(hal::I2cSwitcher::instance().wire(), config::I2C_ADDR_ADS1115, 0);
-    bool adcOk = adc_->begin();
-    Serial.printf("  ADS1115: %s\n", adcOk ? "OK" : "FAILED");
-
-    // Initialize INA226
-    powerMonitor_ = std::make_unique<hal::Ina226>(hal::I2cSwitcher::instance().wire(), config::I2C_ADDR_INA226, 0);
-    bool inaOk = powerMonitor_->begin(config::INA226_SHUNT_OHM);
-    Serial.printf("  INA226: %s\n", inaOk ? "OK" : "FAILED");
-
-    Serial.printf("Onboard sensors: ADS1115=%s, INA226=%s\n", adcOk ? "OK" : "FAIL", inaOk ? "OK" : "FAIL");
+    // Initialize sensor registry
+    hal::initializeSensorRegistry();
+    hal::SensorRegistry::instance().printRegistry();
 
     // Initialize motor controller
     motor_->begin();
@@ -89,100 +79,96 @@ void Application::initializeHardware_() {
     motor_->setPower(0.0f);
     Serial.println("  Motor Controller: OK");
 
-    // Initialize external I2C buses and sensors
-    initializeExternalSensors_();
+    // Discover all I2C sensors on all buses (including onboard bus 0)
+    discoverAllSensors_();
 
     // Initialize OneWire buses
     initializeOneWire_();
 }
 
-void Application::initializeExternalSensors_() {
-    Serial.println("Initializing external sensors...");
+void Application::discoverAllSensors_() {
+    Serial.println("Discovering sensors on all I2C buses...");
 
-    // Define I2C bus configurations (external buses only: 1-4)
-    struct I2cConfig {
-        int sda;
-        int scl;
-        uint8_t id;
-    };
-
-    std::vector<I2cConfig> i2cConfigs;
-    for (uint8_t busId = 1; busId <= 4; busId++) {
+    // Discover on ALL I2C buses (0-4), treating them equally
+    // Bus 0 is the "onboard" bus, buses 1-4 are "external"
+    for (uint8_t busId = 0; busId <= 4; busId++) {
         auto [sda, scl] = config::getI2CPins(busId);
-        if (sda != -1 && scl != -1) {
-            i2cConfigs.push_back({sda, scl, busId});
+        if (sda == -1 || scl == -1) {
+            continue; // Skip unconfigured buses
+        }
+
+        Serial.printf("\n=== I2C Bus %d (SDA=%d, SCL=%d) ===\n", busId, sda, scl);
+
+        // Create bus and scan for devices
+        auto bus = std::make_unique<hal::I2cBus>(sda, scl, busId);
+        if (!bus->begin()) {
+            Serial.printf("  Bus %d initialization FAILED\n", busId);
+            continue;
+        }
+
+        auto devices = bus->scan();
+        if (devices.empty()) {
+            Serial.printf("  No devices found on bus %d\n", busId);
+            continue;
+        }
+
+        Serial.printf("  Found %zu device(s):\n", devices.size());
+
+        // For each device address, try to match with registered sensors
+        for (uint8_t addr : devices) {
+            Serial.printf("    0x%02X: ", addr);
+
+            auto descriptors = hal::SensorRegistry::instance().findByAddress(addr);
+
+            if (descriptors.empty()) {
+                Serial.println("unknown device");
+                continue;
+            }
+
+            // Try each matching descriptor until one succeeds
+            bool initialized = false;
+            for (const auto* desc : descriptors) {
+                Serial.printf("trying %s... ", desc->typeName);
+
+                auto sensor = desc->factory(*bus, addr);
+                if (sensor) {
+                    Serial.printf("OK\n");
+
+                    // Check if sensor needs post-processing (e.g., ADC creates thermistors)
+                    if (sensor->needsPostProcessing()) {
+                        auto virtualSensors = sensor->createPostProcessedSensors();
+                        for (auto& vs : virtualSensors) {
+                            sensors_.push_back(std::move(vs));
+                        }
+                    }
+
+                    sensors_.push_back(std::move(sensor));
+                    initialized = true;
+                    break;
+                } else {
+                    Serial.printf("failed, ");
+                }
+            }
+
+            if (!initialized) {
+                Serial.println("all attempts failed");
+            }
         }
     }
 
-    for (const auto& cfg : i2cConfigs) {
-        auto bus = std::make_unique<hal::I2cBus>(cfg.sda, cfg.scl, cfg.id);
-        bus->begin();
+    Serial.printf("\n=== Sensor Discovery Complete ===\n");
+    Serial.printf("Total sensors discovered: %zu\n", sensors_.size());
 
-        Serial.printf("  I2C Bus %d:\n", cfg.id);
-        auto devices = bus->scan();
+    // Print summary by type
+    std::map<String, int> typeCounts;
+    for (const auto& sensor : sensors_) {
+        String type = sensor->getTypeName();
+        typeCounts[type]++;
+    }
 
-        // Try to initialize sensors on this bus
-        size_t cntBme = 0, cntSi = 0, cntZmod = 0, cntUnknown = 0;
-        for (uint8_t addr : devices) {
-            Serial.printf("    Device at 0x%02X\n", addr);
-            if (addr == config::I2C_ADDR_BME688 || addr == 0x77) {
-                auto bme = std::make_unique<hal::Bme688>(bus->select(), addr, cfg.id);
-                if (bme->begin()) {
-                    Serial.printf("    BME688 found at 0x%02X\n", addr);
-                    bme688Sensors_.push_back(std::move(bme));
-                    cntBme++;
-                } else {
-                    Serial.printf("    BME688 device at 0x%02X begin() FAILED\n", addr);
-                }
-            }
-
-            // Si7021 has fixed address 0x40
-            if (addr == 0x40) {
-                auto si = std::make_unique<hal::Si7021>(bus->select(), cfg.id);
-                if (si->begin()) {
-                    Serial.printf("    Si7021 found at 0x%02X\n", addr);
-                    si7021Sensors_.push_back(std::move(si));
-                    cntSi++;
-                } else {
-                    Serial.printf("    Si7021 device at 0x%02X begin() FAILED\n", addr);
-                }
-            }
-
-            // AHT20 has fixed address 0x38
-            if (addr == config::I2C_ADDR_AHT20) {
-                auto aht = std::make_unique<hal::Aht20>(bus->select(), cfg.id, config::I2C_ADDR_AHT20);
-                if (aht->begin()) {
-                    Serial.printf("    AHT20 found at 0x%02X\n", addr);
-                    aht20Sensors_.push_back(std::move(aht));
-                    cntSi++;  // Count as Si7021-compatible sensor
-                } else {
-                    Serial.printf("    AHT20 device at 0x%02X begin() FAILED\n", addr);
-                }
-            }
-
-            if (addr == config::I2C_ADDR_ZMOD4510) {
-                auto zmod = std::make_unique<hal::Zmod4510>(bus->select(), addr, cfg.id);
-                if (zmod->begin()) {
-                    Serial.printf("    ZMOD4510 found at 0x%02X\n", addr);
-                    zmod4510Sensors_.push_back(std::move(zmod));
-                    cntZmod++;
-                } else {
-                    Serial.printf("    ZMOD4510 device at 0x%02X begin() FAILED\n", addr);
-                }
-            }
-
-            if (addr != config::I2C_ADDR_BME688 && addr != 0x77 &&
-                addr != 0x40 && addr != config::I2C_ADDR_AHT20 &&
-                addr != config::I2C_ADDR_ZMOD4510) {
-                Serial.printf("    Unknown device at 0x%02X\n", addr);
-                cntUnknown++;
-            }
-        }
-
-        Serial.printf("  Bus %d summary: BME688=%zu, Si7021=%zu, ZMOD4510=%zu, Unknown=%zu\n",
-                      cfg.id, cntBme, cntSi, cntZmod, cntUnknown);
-
-        i2cBuses_.push_back(std::move(bus));
+    Serial.println("Sensor types:");
+    for (const auto& [type, count] : typeCounts) {
+        Serial.printf("  %s: %d\n", type.c_str(), count);
     }
 }
 
@@ -303,34 +289,18 @@ void Application::sendHealthReport_() {
     HealthData health;
     health.uptimeMs = millis();
 
-    // Read ADC
-    if (adc_) {
-        auto adcData = adc_->readAll();
-        if (adcData.valid) {
-            // Motor temperature
-            health.motorTemp.voltage = adcData.motorNtcVolts;
-            health.motorTemp.resistance = thermistor_.resistanceFromV(
-                adcData.motorNtcVolts, adcData.rail3v3Volts);
-            health.motorTemp.tempC = thermistor_.tempC_from_R(health.motorTemp.resistance);
-            health.motorTemp.inRange = thermistor_.isValidRange(health.motorTemp.tempC, 0.0f, 100.0f);
+    // Note: ADC thermistor data and voltage rails are now reported as separate
+    // sensors by the virtual sensors. The health report focuses on system-level data.
 
-            // MCU temperature
-            health.mcuExternalTemp.voltage = adcData.mcuNtcVolts;
-            health.mcuExternalTemp.resistance = thermistor_.resistanceFromV(
-                adcData.mcuNtcVolts, adcData.rail3v3Volts);
-            health.mcuExternalTemp.tempC = thermistor_.tempC_from_R(health.mcuExternalTemp.resistance);
-            health.mcuExternalTemp.inRange = thermistor_.isValidRange(health.mcuExternalTemp.tempC, 0.0f, 100.0f);
-
-            health.rail3v3 = adcData.rail3v3Volts;
-            health.rail5v = adcData.rail5vVolts;
-        }
-    }
-
-    // Read power monitor
-    if (powerMonitor_) {
-        auto powerResult = powerMonitor_->read();
-        if (powerResult.isOk()) {
-            health.inputPower = powerResult.value();
+    // Find and read power monitor sensor
+    for (const auto& sensor : sensors_) {
+        if (strcmp(sensor->getTypeName(), "INA226") == 0) {
+            auto jsonResult = sensor->readAsJson();
+            if (jsonResult.isOk()) {
+                // Parse the JSON to extract power data
+                // For now, we'll report it via the sensor telemetry system
+                // The health report can reference power sensor data
+            }
         }
     }
 
@@ -385,98 +355,49 @@ void Application::readAndReportSensors_() {
         oneWireConversionStarted_ = false;
     }
 
-    // Read environmental sensors
-    // BME688
-    for (auto& sensor : bme688Sensors_) {
-        uint32_t timestamp = millis();
-        auto result = sensor->read();
-        if (result.isOk() && telemetry_) {
-            auto reading = result.value();
-            Serial.printf("[%lu] BME688 bus %u: T=%.2fC RH=%.2f%% P=%.0fPa Gas=%.0f\n",
-                         timestamp, sensor->getBusId(), reading.tempC, reading.humidity,
-                         reading.pressurePa, reading.gasResistance);
-            
-            StaticJsonDocument<256> doc;
-            JsonObject fields = doc.to<JsonObject>();
-            fields["temp_c"] = reading.tempC;
-            fields["humidity"] = reading.humidity;
-            fields["pressure_pa"] = reading.pressurePa;
-            fields["gas_resistance"] = reading.gasResistance;
+    // Read all I2C sensors using unified interface
+    uint32_t timestamp = millis();
+    Serial.printf("[%lu] Reading %zu sensors...\n", timestamp, sensors_.size());
 
-            Serial.printf("[%lu] BME688 bus %u: created fields object with %zu fields\n",
-                         millis(), sensor->getBusId(), fields.size());
-            
-            telemetry_->sendSensorData("bme688", sensor->getBusId(), fields);
-        } else if (!result.isOk()) {
-            Serial.printf("[%lu] BME688 bus %u: read failed\n", timestamp, sensor->getBusId());
+    for (const auto& sensor : sensors_) {
+        if (!sensor->isConnected()) {
+            Serial.printf("[%lu] %s on bus %u: disconnected\n",
+                         timestamp, sensor->getTypeName(), sensor->getBusId());
+            continue;
         }
-    }
 
-    // Si7021
-    for (auto& sensor : si7021Sensors_) {
-        auto result = sensor->read();
-        if (result.isOk() && telemetry_) {
-            auto reading = result.value();
-            StaticJsonDocument<256> doc;
-            JsonObject fields = doc.to<JsonObject>();
-            fields["temp_c"] = reading.tempC;
-            fields["humidity"] = reading.humidity;
+        auto jsonResult = sensor->readAsJson();
+        if (jsonResult.isOk() && telemetry_) {
+            String jsonFields = jsonResult.value();
 
-            telemetry_->sendSensorData("si7021", sensor->getBusId(), fields,
-                                      reading.serialNumber);
-        }
-    }
+            // Parse JSON string to ArduinoJson object for telemetry
+            StaticJsonDocument<512> doc;
+            DeserializationError error = deserializeJson(doc, jsonFields);
 
-    // AHT20
-    for (auto& sensor : aht20Sensors_) {
-        uint32_t timestamp = millis();
-        auto result = sensor->read();
-        if (result.isOk() && telemetry_) {
-            auto reading = result.value();
-            Serial.printf("[%lu] AHT20 bus %u: T=%.2fC RH=%.2f%%\n",
-                         timestamp, sensor->getBusId(), reading.tempC, reading.humidity);
-            
-            StaticJsonDocument<256> doc;
-            JsonObject fields = doc.to<JsonObject>();
-            fields["temp_c"] = reading.tempC;
-            fields["humidity"] = reading.humidity;
+            if (!error) {
+                JsonObject fields = doc.as<JsonObject>();
 
-            Serial.printf("[%lu] AHT20 bus %u: created fields object with %zu fields\n",
-                         millis(), sensor->getBusId(), fields.size());
+                Serial.printf("[%lu] %s bus %u: %s\n",
+                             timestamp, sensor->getTypeName(), sensor->getBusId(),
+                             jsonFields.c_str());
 
-            telemetry_->sendSensorData("aht20", sensor->getBusId(), fields,
-                                      reading.serialNumber);
-        } else if (!result.isOk()) {
-            Serial.printf("[%lu] AHT20 bus %u: read failed\n", timestamp, sensor->getBusId());
-        }
-    }
-
-    // ZMOD4510
-    for (auto& sensor : zmod4510Sensors_) {
-        auto result = sensor->read();
-        if (result.isOk() && telemetry_) {
-            auto reading = result.value();
-            if (reading.valid) {
-                StaticJsonDocument<256> doc;
-                JsonObject fields = doc.to<JsonObject>();
-                if (std::isfinite(reading.tempC)) {
-                    fields["temp_c"] = reading.tempC;
+                // Send to telemetry with sensor's measurement name
+                auto serial = sensor->getSerial();
+                if (serial.has_value()) {
+                    telemetry_->sendSensorData(sensor->getMeasurementName(),
+                                             sensor->getBusId(), fields, serial.value());
+                } else {
+                    telemetry_->sendSensorData(sensor->getMeasurementName(),
+                                             sensor->getBusId(), fields);
                 }
-                if (std::isfinite(reading.humidity)) {
-                    fields["humidity"] = reading.humidity;
-                }
-                if (std::isfinite(reading.aqi)) {
-                    fields["aqi"] = reading.aqi;
-                }
-                if (std::isfinite(reading.ozonePpb)) {
-                    fields["ozone_ppb"] = reading.ozonePpb;
-                }
-                if (std::isfinite(reading.no2Ppb)) {
-                    fields["no2_ppb"] = reading.no2Ppb;
-                }
-
-                telemetry_->sendSensorData("zmod4510", sensor->getBusId(), fields);
+            } else {
+                Serial.printf("[%lu] %s bus %u: JSON parse failed: %s\n",
+                             timestamp, sensor->getTypeName(), sensor->getBusId(),
+                             error.c_str());
             }
+        } else if (!jsonResult.isOk()) {
+            Serial.printf("[%lu] %s bus %u: read failed\n",
+                         timestamp, sensor->getTypeName(), sensor->getBusId());
         }
     }
 

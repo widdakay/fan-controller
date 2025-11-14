@@ -1,6 +1,7 @@
 #pragma once
 #include "app/Types.hpp"
 #include "util/Result.hpp"
+#include "hal/sensors/ISensor.hpp"
 #include <INA226_WE.h>
 #include <Wire.h>
 #include <Arduino.h>
@@ -8,12 +9,14 @@
 
 namespace hal {
 
-class Ina226 {
+class Ina226 : public ISensor<app::PowerReading> {
 public:
     explicit Ina226(TwoWire& wire = Wire, uint8_t addr = 0x40, uint8_t busId = 0)
         : wire_(wire), addr_(addr), busId_(busId), ina226_(addr) {}
 
-    bool begin(float shuntResistorOhm = 0.001f) {
+    bool begin() override { return begin(0.001f); }
+
+    bool begin(float shuntResistorOhm) {
         hal::I2cSwitcher::instance().useBusId(busId_);
         Serial.printf("[INA226][bus %u][0x%02X] begin()\n", busId_, addr_);
         if (!ina226_.init()) {
@@ -36,7 +39,7 @@ public:
         return true;
     }
 
-    util::Result<app::PowerReading, app::I2cError> read() {
+    util::Result<app::PowerReading, app::SensorError> read() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
         Serial.printf("[INA226][bus %u][0x%02X] read() start\n", busId_, addr_);
         app::PowerReading reading;
@@ -51,7 +54,14 @@ public:
 
         Serial.printf("[INA226][bus %u][0x%02X] V=%.3fV I=%.1fmA P=%.1fmW\n",
                       busId_, addr_, reading.busVolts, reading.currentMilliamps, reading.powerMilliwatts);
-        return util::Result<app::PowerReading, app::I2cError>::Ok(reading);
+        return util::Result<app::PowerReading, app::SensorError>::Ok(reading);
+    }
+
+    const char* getName() const override { return "INA226"; }
+
+    bool isConnected() const override {
+        // Could implement by trying to read a register
+        return true; // Assume connected if begin() succeeded
     }
 
     bool checkOverflow() const {

@@ -1,5 +1,5 @@
 #pragma once
-#include "IAdc.hpp"
+#include "hal/sensors/IAdc.hpp"
 #include <Adafruit_ADS1X15.h>
 #include <Wire.h>
 #include <Arduino.h>
@@ -42,6 +42,11 @@ public:
 
         Serial.printf("[ADS1115][bus %u][0x%02X] ch%u = %.4f V\n", busId_, addr_, channel, volts);
         return util::Result<float, app::I2cError>::Ok(volts);
+    }
+
+    bool isConnected() const override {
+        // Assume connected if begin() succeeded
+        return true;
     }
 
 private:
