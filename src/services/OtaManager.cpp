@@ -2,8 +2,9 @@
 
 namespace services {
 
-OtaManager::OtaManager(HttpsClient& httpsClient)
+OtaManager::OtaManager(HttpsClient& httpsClient, WatchdogService& watchdog)
     : httpsClient_(httpsClient),
+      watchdog_(watchdog),
       firmwareCheckTimer_(config::TASK_FW_CHECK_MS) {}
 
 void OtaManager::begin() {
@@ -24,8 +25,10 @@ void OtaManager::begin() {
         }
     });
 
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    ArduinoOTA.onProgress([this](unsigned int progress, unsigned int total) {
         Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+        // Feed watchdog during OTA to prevent timeout on long updates
+        watchdog_.feed();
     });
 
     ArduinoOTA.onError([](ota_error_t error) {

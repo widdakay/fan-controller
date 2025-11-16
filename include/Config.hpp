@@ -149,13 +149,22 @@ inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/particle/f
 // inline constexpr const char* DEVICE_NAME = "LuceCTTestFan";
 
 
+// // MQTT Configuration
+// inline constexpr uint16_t MQTT_PORT = 1883;
+// inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard/fan1/power";
+// inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard/fan1/power/status";
+
+// // Device identification
+// inline constexpr const char* DEVICE_NAME = "TestBoard";
+
+
 // MQTT Configuration
 inline constexpr uint16_t MQTT_PORT = 1883;
-inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard/fan1/power";
-inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard/fan1/power/status";
+inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard3 /fan1/power";
+inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard3/fan1/power/status";
 
 // Device identification
-inline constexpr const char* DEVICE_NAME = "TestBoard";
+inline constexpr const char* DEVICE_NAME = "TestBoard3";
 
 // ============================================================================
 // Compile-time validation

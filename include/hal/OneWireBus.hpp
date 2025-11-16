@@ -17,19 +17,6 @@ public:
 
         Serial.printf("OneWire bus %d: Found %d devices\n", busId_, deviceCount_);
 
-        // Store addresses
-        addresses_.clear();
-        for (uint8_t i = 0; i < deviceCount_; i++) {
-            DeviceAddress addr;
-            if (sensors_.getAddress(addr, i)) {
-                uint64_t addr64 = 0;
-                for (int j = 0; j < 8; j++) {
-                    addr64 = (addr64 << 8) | addr[j];
-                }
-                addresses_.push_back(addr64);
-            }
-        }
-
         // Set resolution to 12-bit for accuracy
         sensors_.setResolution(12);
 
@@ -51,9 +38,15 @@ public:
 
             float tempC = sensors_.getTempC(addr);
 
+            // Convert address to uint64_t (same logic as begin())
+            uint64_t addr64 = 0;
+            for (int j = 0; j < 8; j++) {
+                addr64 = (addr64 << 8) | addr[j];
+            }
+
             app::OneWireReading reading;
             reading.busId = busId_;
-            reading.address = addresses_[i];
+            reading.address = addr64;
             reading.tempC = tempC;
             reading.valid = (tempC != DEVICE_DISCONNECTED_C) &&
                            (tempC > -40.0f) && (tempC < 125.0f);
@@ -73,7 +66,6 @@ private:
     OneWire oneWire_;
     DallasTemperature sensors_;
     uint8_t deviceCount_ = 0;
-    std::vector<uint64_t> addresses_;
 };
 
 } // namespace hal

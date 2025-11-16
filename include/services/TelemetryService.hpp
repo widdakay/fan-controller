@@ -224,7 +224,9 @@ public:
             tags["device"] = config::DEVICE_NAME;
             tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
             tags["bus_id"] = reading.busId;
-            tags["address"] = String((uint32_t)reading.address, HEX);
+            char addrStr[17];
+            snprintf(addrStr, sizeof(addrStr), "%016llX", reading.address);
+            tags["address"] = addrStr;
 
             JsonObject fields = doc.createNestedObject("fields");
             fields["arduino_millis"] = timestamp;

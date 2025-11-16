@@ -222,7 +222,7 @@ void Application::initializeServices_() {
     });
 
     // Initialize OTA
-    ota_ = std::make_unique<services::OtaManager>(*https_);
+    ota_ = std::make_unique<services::OtaManager>(*https_, watchdog_);
     ota_->begin();
     ota_->setOtaCallback([this](bool active) {
         leds_->setOtaStatus(active);
@@ -333,19 +333,17 @@ void Application::publishMqttStatus_() {
 }
 
 void Application::readAndReportSensors_() {
-    // Start OneWire temperature conversion
+    // Start OneWire temperature conversion if not already started
     if (!oneWireConversionStarted_) {
         for (auto& bus : oneWireBuses_) {
             bus->requestTemperatures();
         }
         oneWireConversionStarted_ = true;
         oneWireConversionTimer_.reset();
-        return;
     }
 
-    // Check if conversion is complete
-    if (oneWireConversionTimer_.hasElapsed()) {
-        // Read OneWire temperatures
+    // Read OneWire temperatures only if conversion is complete
+    if (oneWireConversionStarted_ && oneWireConversionTimer_.hasElapsed()) {
         for (auto& bus : oneWireBuses_) {
             auto readings = bus->readAll();
             if (telemetry_ && !readings.empty()) {
@@ -354,6 +352,8 @@ void Application::readAndReportSensors_() {
         }
         oneWireConversionStarted_ = false;
     }
+
+    // Always continue to read I2C sensors below (removed early return)
 
     // Read all I2C sensors using unified interface
     uint32_t timestamp = millis();
