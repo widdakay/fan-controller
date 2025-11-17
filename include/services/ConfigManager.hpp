@@ -37,16 +37,18 @@ struct DeviceConfig {
 
     // Constructor with defaults
     DeviceConfig()
-        : deviceName("ESP32-Fan")
-        , mqttServer("192.168.1.1")
-        , mqttPort(1883)
-        , mqttTopicPowerCommand("device/fan/power")
-        , mqttTopicPowerStatus("device/fan/power/status")
-        , apiInfluxDb("https://data.example.com/particle/log")
-        , apiFirmwareUpdate("https://data.example.com/particle/fw/update")
+        : deviceName(config::DEVICE_NAME)
+        , mqttServer(config::MQTT_SERVER)
+        , mqttPort(config::MQTT_PORT)
+        , mqttTopicPowerCommand(config::MQTT_TOPIC_POWER_COMMAND)
+        , mqttTopicPowerStatus(config::MQTT_TOPIC_POWER_STATUS)
+        , apiInfluxDb(config::API_INFLUXDB)
+        , apiFirmwareUpdate(config::API_FW_UPDATE)
     {
-        // Add one default WiFi credential
-        wifiCredentials.push_back(WiFiCredential("YourSSID", "YourPassword"));
+        // Add WiFi credentials from SecureConfig
+        for (const auto& cred : config::WIFI_CREDENTIALS) {
+            wifiCredentials.push_back(WiFiCredential(cred.ssid, cred.password));
+        }
     }
 };
 
