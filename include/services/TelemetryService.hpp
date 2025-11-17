@@ -5,6 +5,7 @@
 #include "util/RingBuffer.hpp"
 #include <ArduinoJson.h>
 #include <ESP.h>
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -85,7 +86,7 @@ public:
     void sendSensorData(const char* measurement, uint8_t busId,
                        const JsonObject& fields, uint64_t serialNum = 0, const String& sensorName = String()) {
         uint32_t timestamp = millis();
-        Serial.printf("[%u] sendSensorData: measurement=%s, busId=%u, sensorName=%s, doc capacity=%zu, doc usage=%zu\n",
+        Logger::debug("[%u] sendSensorData: measurement=%s, busId=%u, sensorName=%s, doc capacity=%zu, doc usage=%zu",
                      timestamp, measurement, busId, sensorName.isEmpty() ? "null" : sensorName.c_str(), batchDoc_.capacity(), batchDoc_.memoryUsage());
         
 
@@ -98,14 +99,14 @@ public:
         // Verify the object was created (array size should increase)
         if (arraySizeAfter == arraySizeBefore) {
             // Object creation failed - document is likely full
-            Serial.printf("[%lu] sendSensorData: ERROR - failed to create nested object (doc full?), flushing and retrying\n", millis());
+            Logger::error("[%u] sendSensorData: ERROR - failed to create nested object (doc full?), flushing and retrying", millis());
             flushBatch();
             batchArray_ = batchDoc_.to<JsonArray>();
             doc = batchArray_.createNestedObject();
-            
+
             // Check again
             if (batchArray_.size() == 0) {
-                Serial.printf("[%lu] sendSensorData: ERROR - still failed after flush, skipping this measurement\n", millis());
+                Logger::error("[%u] sendSensorData: ERROR - still failed after flush, skipping this measurement", millis());
                 return;
             }
         }
@@ -124,7 +125,7 @@ public:
 
         if (!sensorName.isEmpty()) {
             tags["sensor_name"] = sensorName;  // String object will be copied by ArduinoJson
-            Serial.printf("[%lu] sendSensorData: set sensor_name tag to '%s'\n", millis(), sensorName.c_str());
+            Logger::debug("[%u] sendSensorData: set sensor_name tag to '%s'", millis(), sensorName.c_str());
         }
 
         // Copy fields - need to copy from source JsonObject to new one
@@ -198,17 +199,17 @@ public:
                 docFields[keyCopy] = value;
             }
             fieldCount++;
-            Serial.printf("[%lu] sendSensorData: copied field %s\n", millis(), keyCopy.c_str());
+            Logger::debug("[%u] sendSensorData: copied field %s", millis(), keyCopy.c_str());
         }
 
-        Serial.printf("[%lu] sendSensorData: copied %zu fields from source\n", millis(), fieldCount);
-        
+        Logger::debug("[%u] sendSensorData: copied %zu fields from source", millis(), fieldCount);
+
         // Always add timestamp - ensures at least one field (InfluxDB requirement)
         docFields["arduino_millis"] = timestamp;
-        
+
         // Verify fields were actually set by checking if they exist
         size_t verifiedCount = docFields.size();
-        Serial.printf("[%lu] sendSensorData: verified %zu fields in docFields, doc usage=%zu\n", 
+        Logger::debug("[%u] sendSensorData: verified %zu fields in docFields, doc usage=%zu",
                      millis(), verifiedCount, batchDoc_.memoryUsage());
     }
 
@@ -268,18 +269,18 @@ public:
         uint32_t timestamp = millis();
         size_t arraySize = batchArray_.size();
         size_t docUsage = batchDoc_.memoryUsage();
-        Serial.printf("[%u] flushBatch: batchArray size=%zu, doc usage=%zu/%zu\n", 
+        Logger::debug("[%u] flushBatch: batchArray size=%zu, doc usage=%zu/%zu",
                      timestamp, arraySize, docUsage, batchDoc_.capacity());
-        
+
         if (arraySize == 0) {
             // Even if array is empty, if document is nearly full, we should clear it
             // to free memory for future operations
             if (docUsage > batchDoc_.capacity() * 0.8) {
-                Serial.printf("[%lu] flushBatch: array empty but doc nearly full, clearing document\n", millis());
+                Logger::debug("[%u] flushBatch: array empty but doc nearly full, clearing document", millis());
                 batchDoc_.clear();
                 batchArray_ = batchDoc_.to<JsonArray>();
             } else {
-                Serial.printf("[%lu] flushBatch: nothing to send, returning\n", millis());
+                Logger::debug("[%u] flushBatch: nothing to send, returning", millis());
             }
             return;  // Nothing to send
         }
@@ -289,8 +290,8 @@ public:
         // Force floating point precision to ensure 0.0 doesn't serialize as 0
         serializeJson(batchArray_, jsonData);
 
-        Serial.printf("[%lu] flushBatch: serialized %zu bytes, %zu points\n", millis(), jsonData.length(), batchSize);
-        Serial.printf("[%lu] flushBatch: JSON data: %s\n", millis(), jsonData.c_str());
+        Logger::debug("[%u] flushBatch: serialized %zu bytes, %zu points", millis(), jsonData.length(), batchSize);
+        Logger::debug("[%u] flushBatch: JSON data: %s", millis(), jsonData.c_str());
 
         // Clear the batch for next use before sending (in case send fails)
         batchArray_.clear();
@@ -304,14 +305,14 @@ public:
 private:
     void sendData(const String& jsonData, size_t batchSize) {
         uint32_t timestamp = millis();
-        Serial.printf("[%u] sendData: sending batch of %zu points\n", timestamp, batchSize);
-        
+        Logger::debug("[%u] sendData: sending batch of %zu points", timestamp, batchSize);
+
         auto result = httpsClient_.post(apiEndpoint_.c_str(), jsonData);
 
         if (result.isOk()) {
-            Serial.printf("[%lu] Telemetry batch sent successfully (%zu points)\n", millis(), batchSize);
+            Logger::info("[%u] Telemetry batch sent successfully (%zu points)", millis(), batchSize);
         } else {
-            Serial.printf("[%lu] Failed to send telemetry batch\n", millis());
+            Logger::error("[%u] Failed to send telemetry batch", millis());
             // Could flash error LED here
         }
     }

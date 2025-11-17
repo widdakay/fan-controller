@@ -2,6 +2,7 @@
 #include "Config.hpp"
 #include <esp_task_wdt.h>
 #include <Arduino.h>
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -14,7 +15,7 @@ public:
         esp_task_wdt_init(timeoutMs / 1000, true);  // timeout in seconds, panic on timeout
         esp_task_wdt_add(NULL);  // Add current task to watchdog
 
-        Serial.printf("Watchdog initialized with %lums timeout\n", timeoutMs);
+        Logger::info("Watchdog initialized with %ums timeout", timeoutMs);
     }
 
     void feed() {

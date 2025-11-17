@@ -1,4 +1,5 @@
 #include "services/OtaManager.hpp"
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -15,36 +16,36 @@ void OtaManager::begin(const String& deviceName, const String& fwUpdateUrl) {
     ArduinoOTA.setHostname(deviceName_.c_str());
 
     ArduinoOTA.onStart([this]() {
-        Serial.println("OTA Update Starting...");
+        Logger::info("OTA Update Starting...");
         if (otaCallback_) {
             otaCallback_(true);
         }
     });
 
     ArduinoOTA.onEnd([this]() {
-        Serial.println("\nOTA Update Complete");
+        Logger::info("OTA Update Complete");
         if (otaCallback_) {
             otaCallback_(false);
         }
     });
 
     ArduinoOTA.onProgress([this](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+        Logger::info("Progress: %u%%", (progress / (total / 100)));
         // Feed watchdog during OTA to prevent timeout on long updates
         watchdog_.feed();
     });
 
     ArduinoOTA.onError([](ota_error_t error) {
-        Serial.printf("OTA Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-        else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-        else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-        else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-        else if (error == OTA_END_ERROR) Serial.println("End Failed");
+        Logger::error("OTA Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR) Logger::error("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR) Logger::error("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR) Logger::error("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR) Logger::error("Receive Failed");
+        else if (error == OTA_END_ERROR) Logger::error("End Failed");
     });
 
     ArduinoOTA.begin();
-    Serial.println("Arduino OTA enabled");
+    Logger::info("Arduino OTA enabled");
 }
 
 void OtaManager::setOtaCallback(OtaCallback callback) {
@@ -56,7 +57,7 @@ void OtaManager::checkForUpdate() {
         return;
     }
 
-    Serial.println("Checking for firmware update...");
+    Logger::info("Checking for firmware update...");
 
     // Get chip ID
     uint64_t chipId = ESP.getEfuseMac();
@@ -78,15 +79,15 @@ void OtaManager::checkForUpdate() {
         responseStr.trim();
 
         if (responseStr == "True" || responseStr == "true") {
-            Serial.println("Firmware update available!");
+            Logger::info("Firmware update available!");
             // TODO: Implement HTTPS OTA download and update
             // This would require downloading the firmware binary
             // and using Update.h to flash it
         } else {
-            Serial.println("Firmware is up to date");
+            Logger::info("Firmware is up to date");
         }
     } else {
-        Serial.println("Failed to check for firmware update");
+        Logger::error("Failed to check for firmware update");
     }
 }
 

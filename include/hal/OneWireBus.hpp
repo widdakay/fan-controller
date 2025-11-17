@@ -3,6 +3,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <vector>
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -15,7 +16,7 @@ public:
         sensors_.begin();
         deviceCount_ = sensors_.getDeviceCount();
 
-        Serial.printf("OneWire bus %d: Found %d devices\n", busId_, deviceCount_);
+        Logger::info("OneWire bus %d: Found %d devices", busId_, deviceCount_);
 
         // Set resolution to 12-bit for accuracy
         sensors_.setResolution(12);

@@ -1,6 +1,7 @@
 #include "app/Application.hpp"
 #include <map>
 #include <ArduinoJson.h>
+#include "util/Logger.hpp"
 
 namespace app {
 
@@ -15,16 +16,16 @@ Application::Application()
 {}
 
 void Application::setup() {
-    Serial.begin(115200);
+    Logger::begin(115200);
     delay(500);
-    Serial.println("\n\n=== ESP32 Air Quality Controller ===");
-    Serial.printf("Firmware: %s\n", FIRMWARE_VERSION);
-    Serial.printf("Chip ID: %llx\n", ESP.getEfuseMac());
+    Logger::info("=== ESP32 Air Quality Controller ===");
+    Logger::info("Firmware: %s", FIRMWARE_VERSION);
+    Logger::info("Chip ID: %llx", ESP.getEfuseMac());
 
     // Initialize configuration manager (must be first!)
     auto configResult = config_.begin();
     if (configResult.isErr()) {
-        Serial.println("FATAL: Failed to initialize configuration!");
+        Logger::error("FATAL: Failed to initialize configuration!");
         while (1) { delay(1000); }  // Halt
     }
 
@@ -53,7 +54,7 @@ void Application::setup() {
     // Register tasks
     registerTasks_();
 
-    Serial.println("=== Initialization Complete ===\n");
+    Logger::info("=== Initialization Complete ===");
 }
 
 void Application::loop() {
@@ -77,7 +78,7 @@ void Application::loop() {
 }
 
 void Application::initializeHardware_() {
-    Serial.println("Initializing hardware...");
+    Logger::info("Initializing hardware...");
 
     // Initialize sensor registry
     hal::initializeSensorRegistry();
@@ -87,7 +88,7 @@ void Application::initializeHardware_() {
     motor_->begin();
     motor_->setDirection(false);
     motor_->setPower(0.0f);
-    Serial.println("  Motor Controller: OK");
+    Logger::info("  Motor Controller: OK");
 
     // Discover all I2C sensors on all buses (including onboard bus 0)
     discoverAllSensors_();
@@ -97,7 +98,7 @@ void Application::initializeHardware_() {
 }
 
 void Application::discoverAllSensors_() {
-    Serial.println("Discovering sensors on all I2C buses...");
+    Logger::info("Discovering sensors on all I2C buses...");
 
     // Discover on ALL I2C buses (0-4), treating them equally
     // Bus 0 is the "onboard" bus, buses 1-4 are "external"
@@ -107,42 +108,42 @@ void Application::discoverAllSensors_() {
             continue; // Skip unconfigured buses
         }
 
-        Serial.printf("\n=== I2C Bus %d (SDA=%d, SCL=%d) ===\n", busId, sda, scl);
+        Logger::info("=== I2C Bus %d (SDA=%d, SCL=%d) ===", busId, sda, scl);
 
         // Create bus and scan for devices
         auto bus = std::make_unique<hal::I2cBus>(sda, scl, busId);
         if (!bus->begin()) {
-            Serial.printf("  Bus %d initialization FAILED\n", busId);
+            Logger::error("  Bus %d initialization FAILED", busId);
             continue;
         }
 
         auto devices = bus->scan();
         if (devices.empty()) {
-            Serial.printf("  No devices found on bus %d\n", busId);
+            Logger::info("  No devices found on bus %d", busId);
             continue;
         }
 
-        Serial.printf("  Found %zu device(s):\n", devices.size());
+        Logger::info("  Found %zu device(s):", devices.size());
 
         // For each device address, try to match with registered sensors
         for (uint8_t addr : devices) {
-            Serial.printf("    0x%02X: ", addr);
+            Logger::info("    0x%02X: ", addr);
 
             auto descriptors = hal::SensorRegistry::instance().findByAddress(addr);
 
             if (descriptors.empty()) {
-                Serial.println("unknown device");
+                Logger::info("unknown device");
                 continue;
             }
 
             // Try each matching descriptor until one succeeds
             bool initialized = false;
             for (const auto* desc : descriptors) {
-                Serial.printf("trying %s... ", desc->typeName);
+                Logger::info("trying %s... ", desc->typeName);
 
                 auto sensor = desc->factory(*bus, addr);
                 if (sensor) {
-                    Serial.printf("OK\n");
+                    Logger::info("OK");
 
                     // Check if sensor needs post-processing (e.g., ADC creates thermistors)
                     if (sensor->needsPostProcessing()) {
@@ -156,18 +157,18 @@ void Application::discoverAllSensors_() {
                     initialized = true;
                     break;
                 } else {
-                    Serial.printf("failed, ");
+                    Logger::info("failed, ");
                 }
             }
 
             if (!initialized) {
-                Serial.println("all attempts failed");
+                Logger::info("all attempts failed");
             }
         }
     }
 
-    Serial.printf("\n=== Sensor Discovery Complete ===\n");
-    Serial.printf("Total sensors discovered: %zu\n", sensors_.size());
+    Logger::info("=== Sensor Discovery Complete ===");
+    Logger::info("Total sensors discovered: %zu", sensors_.size());
 
     // Print summary by type
     std::map<String, int> typeCounts;
@@ -176,14 +177,14 @@ void Application::discoverAllSensors_() {
         typeCounts[type]++;
     }
 
-    Serial.println("Sensor types:");
+    Logger::info("Sensor types:");
     for (const auto& [type, count] : typeCounts) {
-        Serial.printf("  %s: %d\n", type.c_str(), count);
+        Logger::info("  %s: %d", type.c_str(), count);
     }
 }
 
 void Application::initializeOneWire_() {
-    Serial.println("Initializing OneWire buses...");
+    Logger::info("Initializing OneWire buses...");
 
     std::vector<std::pair<int, uint8_t>> oneWireConfigs = {
         {config::PIN_ONEWIRE_1, 0},
@@ -195,31 +196,31 @@ void Application::initializeOneWire_() {
     for (const auto& cfg : oneWireConfigs) {
         auto bus = std::make_unique<hal::OneWireBus>(cfg.first, cfg.second);
         if (bus->begin() && bus->getDeviceCount() > 0) {
-            Serial.printf("  OneWire Bus %d: %d device(s)\n",
-                         cfg.second, bus->getDeviceCount());
+            Logger::info("  OneWire Bus %d: %d device(s)",
+                          cfg.second, bus->getDeviceCount());
             oneWireBuses_.push_back(std::move(bus));
         }
     }
 }
 
 void Application::connectWiFi_() {
-    Serial.println("Connecting to WiFi...");
+    Logger::info("Connecting to WiFi...");
 
     wifi_ = std::make_unique<services::WiFiManager>();
     auto result = wifi_->connect(config_.get().wifiCredentials);
 
     if (result.isOk()) {
-        Serial.printf("Connected to: %s\n", wifi_->getConnectedSSID().c_str());
-        Serial.printf("IP Address: %s\n", wifi_->getLocalIP().c_str());
-        Serial.printf("RSSI: %d dBm\n", wifi_->getRSSI());
+        Logger::info("Connected to: %s", wifi_->getConnectedSSID().c_str());
+        Logger::info("IP Address: %s", wifi_->getLocalIP().c_str());
+        Logger::info("RSSI: %d dBm", wifi_->getRSSI());
     } else {
-        Serial.println("WiFi connection failed!");
+        Logger::error("WiFi connection failed!");
         leds_->errorFlash();
     }
 }
 
 void Application::initializeServices_() {
-    Serial.println("Initializing services...");
+    Logger::info("Initializing services...");
 
     // Initialize HTTPS client
     https_ = std::make_unique<services::HttpsClient>();
@@ -228,12 +229,23 @@ void Application::initializeServices_() {
     mqtt_ = std::make_unique<services::MqttClient>(wifiClient_);
     const auto& cfg = config_.get();
     mqtt_->begin(cfg.mqttServer, cfg.mqttPort,
-                 cfg.mqttTopicPowerCommand, cfg.mqttTopicPowerStatus);
+                  cfg.mqttTopicPowerCommand, cfg.mqttTopicPowerStatus);
     mqtt_->setMessageCallback([this](const char* topic, float value) {
         this->handleMqttMessage_(topic, value);
     });
     mqtt_->setConfigCallback([this](const char* topic, const char* payload) {
         this->handleConfigMessage_(topic, payload);
+    });
+
+    // Enable MQTT logging (send INFO level and above to MQTT)
+    Logger::enableMqttLogging(true);
+    Logger::setMqttLogLevel(LogLevel::INFO);
+    Logger::setMqttLogTopic(String(cfg.deviceName) + "/logs");
+    Logger::setMqttCallback([this](const char* topic, const String& payload) -> bool {
+        if (mqtt_ && mqtt_->isConnected()) {
+            return mqtt_->publish(topic, payload, false);
+        }
+        return false;
     });
 
     // Initialize OTA
@@ -245,17 +257,17 @@ void Application::initializeServices_() {
 
     // Initialize telemetry
     telemetry_ = std::make_unique<services::TelemetryService>(*https_,
-                                                               cfg.deviceName,
-                                                               cfg.apiInfluxDb);
+                                                                cfg.deviceName,
+                                                                cfg.apiInfluxDb);
 
     // Send boot report now that services are initialized
     sendBootReportAfterInit_();
 
-    Serial.println("Services initialized");
+    Logger::info("Services initialized");
 }
 
 void Application::registerTasks_() {
-    Serial.println("Registering tasks...");
+    Logger::info("Registering tasks...");
 
     scheduler_.addTask("heartbeat", [this]() {
         leds_->heartbeat();
@@ -277,7 +289,7 @@ void Application::registerTasks_() {
         ota_->checkForUpdate();
     }, config::TASK_FW_CHECK_MS);
 
-    Serial.printf("Registered %zu tasks\n", scheduler_.taskCount());
+    Logger::info("Registered %zu tasks", scheduler_.taskCount());
 }
 
 void Application::sendBootReport_() {
@@ -374,12 +386,12 @@ void Application::readAndReportSensors_() {
 
     // Read all I2C sensors using unified interface
     uint32_t timestamp = millis();
-    Serial.printf("[%lu] Reading %zu sensors...\n", timestamp, sensors_.size());
+    Logger::info("[%lu] Reading %zu sensors...", timestamp, sensors_.size());
 
     for (const auto& sensor : sensors_) {
         if (!sensor->isConnected()) {
-            Serial.printf("[%lu] %s on bus %u: disconnected\n",
-                         timestamp, sensor->getTypeName(), sensor->getBusId());
+            Logger::warn("[%lu] %s on bus %u: disconnected",
+                          timestamp, sensor->getTypeName(), sensor->getBusId());
             continue;
         }
 
@@ -394,9 +406,9 @@ void Application::readAndReportSensors_() {
             if (!error) {
                 JsonObject fields = doc.as<JsonObject>();
 
-                Serial.printf("[%lu] %s bus %u: %s\n",
-                             timestamp, sensor->getTypeName(), sensor->getBusId(),
-                             jsonFields.c_str());
+                Logger::debug("[%lu] %s bus %u: %s",
+                              timestamp, sensor->getTypeName(), sensor->getBusId(),
+                              jsonFields.c_str());
 
                 // Send to telemetry with sensor's measurement name
                 auto serial = sensor->getSerial();
@@ -407,56 +419,56 @@ void Application::readAndReportSensors_() {
 
                 if (serial.has_value()) {
                     telemetry_->sendSensorData(sensor->getMeasurementName(),
-                                             sensor->getBusId(), fields, serial.value(), sensorNameStr);
+                                              sensor->getBusId(), fields, serial.value(), sensorNameStr);
                 } else {
                     telemetry_->sendSensorData(sensor->getMeasurementName(),
-                                             sensor->getBusId(), fields, 0, sensorNameStr);
+                                              sensor->getBusId(), fields, 0, sensorNameStr);
                 }
             } else {
-                Serial.printf("[%lu] %s bus %u: JSON parse failed: %s\n",
-                             timestamp, sensor->getTypeName(), sensor->getBusId(),
-                             error.c_str());
+                Logger::error("[%lu] %s bus %u: JSON parse failed: %s",
+                              timestamp, sensor->getTypeName(), sensor->getBusId(),
+                              error.c_str());
             }
         } else if (!jsonResult.isOk()) {
-            Serial.printf("[%lu] %s bus %u: read failed\n",
-                         timestamp, sensor->getTypeName(), sensor->getBusId());
+            Logger::error("[%lu] %s bus %u: read failed",
+                          timestamp, sensor->getTypeName(), sensor->getBusId());
         }
     }
 
     // Flush batch after collecting all sensor readings
     if (telemetry_) {
-        Serial.printf("[%lu] readAndReportSensors_: calling flushBatch\n", millis());
+        Logger::debug("[%lu] readAndReportSensors_: calling flushBatch", millis());
         telemetry_->flushBatch();
     }
 }
 
 void Application::handleMqttMessage_(const char* topic, float value) {
-    Serial.printf("Handling MQTT: %s = %.3f\n", topic, value);
+    Logger::info("Handling MQTT: %s = %.3f", topic, value);
 
     const auto& cfg = config_.get();
     if (strcmp(topic, cfg.mqttTopicPowerCommand.c_str()) == 0) {
         if (motor_) {
             motor_->setFromMqtt(value);
-            Serial.printf("Motor power set to: %.1f%%\n", value * 100.0f);
+            Logger::info("Motor power set to: %.1f%%", value * 100.0f);
         }
     }
 }
 
 void Application::handleConfigMessage_(const char* topic, const char* payload) {
-    Serial.printf("Config command: %s\n", payload);
+    Logger::info("Config command: %s", payload);
 
     // Parse JSON command
     StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, payload);
 
     if (error) {
-        Serial.printf("Config JSON parse error: %s\n", error.c_str());
+        Logger::error("Config JSON parse error: %s", error.c_str());
         return;
     }
 
     const char* cmd = doc["cmd"];
     if (!cmd) {
-        Serial.println("Missing 'cmd' field in config message");
+        Logger::error("Missing 'cmd' field in config message");
         return;
     }
 
@@ -466,7 +478,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (name) {
             auto result = config_.setDeviceName(String(name));
             if (result.isOk()) {
-                Serial.printf("Device name set to: %s\n", name);
+                Logger::info("Device name set to: %s", name);
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: Device name updated", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid device name", false);
@@ -479,7 +491,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (server) {
             auto result = config_.setMqttServer(String(server), port);
             if (result.isOk()) {
-                Serial.printf("MQTT server set to: %s:%d (restart required)\n", server, port);
+                Logger::info("MQTT server set to: %s:%d (restart required)", server, port);
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: MQTT server updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid MQTT server", false);
@@ -493,7 +505,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (ssid && password) {
             auto result = config_.setWifiCredential(index, String(ssid), String(password));
             if (result.isOk()) {
-                Serial.printf("WiFi %d set to: %s (restart required)\n", index, ssid);
+                Logger::info("WiFi %d set to: %s (restart required)", index, ssid);
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: WiFi updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid WiFi credentials", false);
@@ -506,7 +518,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (cmdTopic && statTopic) {
             auto result = config_.setMqttTopics(String(cmdTopic), String(statTopic));
             if (result.isOk()) {
-                Serial.printf("MQTT topics updated (restart required)\n");
+                Logger::info("MQTT topics updated (restart required)");
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: Topics updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid topics", false);
@@ -519,7 +531,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (influx && fwUpdate) {
             auto result = config_.setApiEndpoints(String(influx), String(fwUpdate));
             if (result.isOk()) {
-                Serial.printf("API endpoints updated (restart required)\n");
+                Logger::info("API endpoints updated (restart required)");
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: API endpoints updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid endpoints", false);
@@ -533,14 +545,14 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
     else if (strcmp(cmd, "reset_config") == 0) {
         auto result = config_.resetToDefaults();
         if (result.isOk()) {
-            Serial.println("Config reset to defaults (restart required)");
+            Logger::info("Config reset to defaults (restart required)");
             mqtt_->publish((String(topic) + "/status").c_str(), "OK: Config reset, restart required", false);
         } else {
             mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Reset failed", false);
         }
     }
     else {
-        Serial.printf("Unknown config command: %s\n", cmd);
+        Logger::error("Unknown config command: %s", cmd);
         mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Unknown command", false);
     }
 }

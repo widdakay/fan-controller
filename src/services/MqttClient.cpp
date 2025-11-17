@@ -1,4 +1,5 @@
 #include "services/MqttClient.hpp"
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -55,24 +56,24 @@ void MqttClient::reconnect() {
         return;
     }
 
-    Serial.print("Connecting to MQTT...");
+    Logger::info("Connecting to MQTT...");
 
     // Generate client ID from chip ID
     String clientId = "ESP32-";
     clientId += String((uint32_t)ESP.getEfuseMac(), HEX);
 
     if (client_.connect(clientId.c_str())) {
-        Serial.println(" connected");
+        Logger::info(" connected");
 
         // Subscribe to power command topic
         client_.subscribe(topicCommandPower_.c_str());
-        Serial.printf("Subscribed to %s\n", topicCommandPower_.c_str());
+        Logger::info("Subscribed to %s", topicCommandPower_.c_str());
 
         // Subscribe to config topic
         client_.subscribe(topicConfig_.c_str());
-        Serial.printf("Subscribed to %s\n", topicConfig_.c_str());
+        Logger::info("Subscribed to %s", topicConfig_.c_str());
     } else {
-        Serial.printf(" failed, rc=%d\n", client_.state());
+        Logger::error(" failed, rc=%d", client_.state());
     }
 }
 
@@ -82,7 +83,7 @@ void MqttClient::messageCallback(char* topic, byte* payload, unsigned int length
     memcpy(buffer, payload, length);
     buffer[length] = '\0';
 
-    Serial.printf("MQTT message: %s = %s\n", topic, buffer);
+    Logger::info("MQTT message: %s = %s", topic, buffer);
 
     // Check if this is a config message
     if (strcmp(topic, topicConfig_.c_str()) == 0) {

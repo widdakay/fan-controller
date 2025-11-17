@@ -5,6 +5,7 @@
 #include <array>
 #include "app/Types.hpp"
 #include "util/Result.hpp"
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -90,7 +91,7 @@ public:
 
         if (!isInitialized) {
             // First boot - save defaults
-            Serial.println("[ConfigManager] First boot detected, creating default configuration");
+            Logger::info("[ConfigManager] First boot detected, creating default configuration");
             auto saveResult = saveDefaults();
             if (saveResult.isErr()) {
                 return util::Result<void, app::ConfigError>::Err(saveResult.error());
@@ -146,7 +147,7 @@ public:
         // Mark as initialized
         prefs_.putBool("initialized", true);
 
-        Serial.println("[ConfigManager] Configuration saved to NVS");
+        Logger::info("[ConfigManager] Configuration saved to NVS");
         return util::Result<void, app::ConfigError>::Ok();
     }
 
@@ -232,22 +233,22 @@ public:
      * Print current configuration to Serial
      */
     void printConfig() const {
-        Serial.println("\n========== Device Configuration ==========");
-        Serial.printf("Device Name: %s\n", config_.deviceName.c_str());
-        Serial.printf("\nWiFi Networks (%d):\n", config_.wifiCredentials.size());
+        Logger::info("========== Device Configuration ==========");
+        Logger::info("Device Name: %s", config_.deviceName.c_str());
+        Logger::info("WiFi Networks (%d):", config_.wifiCredentials.size());
         for (size_t i = 0; i < config_.wifiCredentials.size(); i++) {
-            Serial.printf("  %d: %s / %s\n", i,
+            Logger::info("  %d: %s / %s", i,
                 config_.wifiCredentials[i].ssid.c_str(),
                 maskPassword(config_.wifiCredentials[i].password).c_str());
         }
-        Serial.printf("\nMQTT:\n");
-        Serial.printf("  Server: %s:%d\n", config_.mqttServer.c_str(), config_.mqttPort);
-        Serial.printf("  Command Topic: %s\n", config_.mqttTopicPowerCommand.c_str());
-        Serial.printf("  Status Topic: %s\n", config_.mqttTopicPowerStatus.c_str());
-        Serial.printf("\nAPI Endpoints:\n");
-        Serial.printf("  InfluxDB: %s\n", config_.apiInfluxDb.c_str());
-        Serial.printf("  FW Update: %s\n", config_.apiFirmwareUpdate.c_str());
-        Serial.println("==========================================\n");
+        Logger::info("MQTT:");
+        Logger::info("  Server: %s:%d", config_.mqttServer.c_str(), config_.mqttPort);
+        Logger::info("  Command Topic: %s", config_.mqttTopicPowerCommand.c_str());
+        Logger::info("  Status Topic: %s", config_.mqttTopicPowerStatus.c_str());
+        Logger::info("API Endpoints:");
+        Logger::info("  InfluxDB: %s", config_.apiInfluxDb.c_str());
+        Logger::info("  FW Update: %s", config_.apiFirmwareUpdate.c_str());
+        Logger::info("==========================================");
     }
 
 private:
@@ -286,7 +287,7 @@ private:
         config_.apiInfluxDb = prefs_.getString("apiInflux", "https://data.example.com/particle/log");
         config_.apiFirmwareUpdate = prefs_.getString("apiFwUpdate", "https://data.example.com/particle/fw/update");
 
-        Serial.println("[ConfigManager] Configuration loaded from NVS");
+        Logger::info("[ConfigManager] Configuration loaded from NVS");
         return util::Result<void, app::ConfigError>::Ok();
     }
 

@@ -4,6 +4,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -33,17 +34,14 @@ public:
             if (httpCode == HTTP_CODE_OK) {
                 return util::Result<String, app::HttpError>::Ok(response);
             } else {
-                Serial.printf("HTTP POST failed with code %d\n", httpCode);
-                Serial.println("URL:");
-                Serial.println(url);
-                Serial.println("Response:");
-                Serial.println(response);
-                Serial.println("JSON Data:");
-                Serial.println(jsonData);
+                Logger::error("HTTP POST failed with code %d", httpCode);
+                Logger::error("URL: %s", url);
+                Logger::error("Response: %s", response.c_str());
+                Logger::error("JSON Data: %s", jsonData.c_str());
                 return util::Result<String, app::HttpError>::Err(app::HttpError::RequestFailed);
             }
         } else {
-            Serial.printf("HTTP POST error: %s\n", http.errorToString(httpCode).c_str());
+            Logger::error("HTTP POST error: %s", http.errorToString(httpCode).c_str());
             http.end();
             return util::Result<String, app::HttpError>::Err(app::HttpError::RequestFailed);
         }

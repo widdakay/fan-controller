@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <functional>
 #include <vector>
+#include "util/Logger.hpp"
 
 namespace app {
 
@@ -74,9 +75,9 @@ public:
 
     // Print task status
     void printStatus() const {
-        Serial.println("=== Task Status ===");
+        Logger::info("=== Task Status ===");
         for (const auto& task : tasks_) {
-            Serial.printf("  %s: %s (interval: %lums, next in: %lums)\n",
+            Logger::info("  %s: %s (interval: %ums, next in: %ums)",
                 task.name,
                 task.enabled ? "enabled" : "disabled",
                 task.intervalMs,

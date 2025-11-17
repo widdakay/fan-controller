@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 #include "hal/I2cSwitcher.hpp"
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -49,14 +50,14 @@ public:
     uint8_t getBusId() const { return busId_; }
 
     void printScanResults() {
-        Serial.printf("I2C Bus %d (SDA=%d, SCL=%d) scan:\n", busId_, sda_, scl_);
+        Logger::info("I2C Bus %d (SDA=%d, SCL=%d) scan:", busId_, sda_, scl_);
         auto devices = scan();
 
         if (devices.empty()) {
-            Serial.println("  No devices found");
+            Logger::info("  No devices found");
         } else {
             for (uint8_t addr : devices) {
-                Serial.printf("  Device at 0x%02X\n", addr);
+                Logger::info("  Device at 0x%02X", addr);
             }
         }
     }

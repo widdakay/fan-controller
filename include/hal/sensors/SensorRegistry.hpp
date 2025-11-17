@@ -3,6 +3,7 @@
 #include "hal/sensors/SensorDescriptor.hpp"
 #include <vector>
 #include <Arduino.h>
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -41,8 +42,7 @@ public:
      */
     void registerSensor(const SensorDescriptor& descriptor) {
         descriptors_.push_back(descriptor);
-        Serial.print("[Registry] Registered sensor type: ");
-        Serial.println(descriptor.typeName);
+        Logger::info("[Registry] Registered sensor type: %s", descriptor.typeName);
     }
 
     /**
@@ -76,22 +76,17 @@ public:
      * @brief Print all registered sensors (for debugging)
      */
     void printRegistry() const {
-        Serial.println("[Registry] Registered sensor types:");
+        Logger::info("[Registry] Registered sensor types:");
         for (const auto& desc : descriptors_) {
-            Serial.print("  - ");
-            Serial.print(desc.typeName);
-            Serial.print(" (");
-            Serial.print(desc.measurementName);
-            Serial.print(") @ addresses: ");
+            String addrStr = "";
             for (size_t i = 0; i < desc.i2cAddresses.size(); i++) {
-                if (i > 0) Serial.print(", ");
-                Serial.print("0x");
-                Serial.print(desc.i2cAddresses[i], HEX);
+                if (i > 0) addrStr += ", ";
+                addrStr += "0x";
+                addrStr += String(desc.i2cAddresses[i], HEX);
             }
-            if (desc.supportsPostProcessing) {
-                Serial.print(" [post-processing]");
-            }
-            Serial.println();
+            String postProcessStr = desc.supportsPostProcessing ? " [post-processing]" : "";
+            Logger::info("  - %s (%s) @ addresses: %s%s",
+                        desc.typeName, desc.measurementName, addrStr.c_str(), postProcessStr.c_str());
         }
     }
 

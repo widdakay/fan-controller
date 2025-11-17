@@ -1,5 +1,6 @@
 #include "services/WiFiManager.hpp"
 #include "services/ConfigManager.hpp"
+#include "util/Logger.hpp"
 
 namespace services {
 
@@ -17,13 +18,13 @@ util::Result<void, app::WiFiError> WiFiManager::connect(const std::vector<WiFiCr
     // Find best matching network
     auto bestNetwork = selectBestNetwork(scanResults, credentials);
     if (!bestNetwork) {
-        Serial.println("No known networks found");
+        Logger::error("No known networks found");
         return util::Result<void, app::WiFiError>::Err(app::WiFiError::ConnectionFailed);
     }
 
     // Connect to selected network
-    Serial.printf("Connecting to %s (RSSI: %d, Ch: %u)...\n",
-                 bestNetwork->ssid.c_str(), bestNetwork->rssi, bestNetwork->channel);
+    Logger::info("Connecting to %s (RSSI: %d, Ch: %u)...",
+                  bestNetwork->ssid.c_str(), bestNetwork->rssi, bestNetwork->channel);
 
     // Prefer a specific BSSID to ensure strongest AP for SSID
     WiFi.begin(bestNetwork->ssid.c_str(),
@@ -41,7 +42,7 @@ util::Result<void, app::WiFiError> WiFiManager::connect(const std::vector<WiFiCr
     }
 
     connectedSsid_ = bestNetwork->ssid;
-    Serial.printf("Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+    Logger::info("Connected! IP: %s", WiFi.localIP().toString().c_str());
 
     return util::Result<void, app::WiFiError>::Ok();
 }
@@ -68,7 +69,7 @@ std::vector<app::WiFiScanResult> WiFiManager::scanNetworks() {
     delay(100);
 
     int n = WiFi.scanNetworks();
-    Serial.printf("WiFi scan found %d networks\n", n);
+    Logger::info("WiFi scan found %d networks", n);
 
     for (int i = 0; i < n; i++) {
         app::WiFiScanResult result;
@@ -87,8 +88,8 @@ std::vector<app::WiFiScanResult> WiFiManager::scanNetworks() {
         }
 
         results.push_back(result);
-        Serial.printf("  %s (RSSI: %d, Ch: %d)\n",
-                     result.ssid.c_str(), result.rssi, result.channel);
+        Logger::debug("  %s (RSSI: %d, Ch: %d)",
+                      result.ssid.c_str(), result.rssi, result.channel);
     }
 
     lastScanResults_ = results;

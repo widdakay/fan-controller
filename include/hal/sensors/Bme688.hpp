@@ -3,6 +3,7 @@
 #include <Adafruit_BME680.h>
 #include <Arduino.h>
 #include "hal/I2cSwitcher.hpp"
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -13,9 +14,9 @@ public:
 
     bool begin() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[BME688][bus %u][0x%02X] begin()\n", busId_, addr_);
+        Logger::debug("[BME688][bus %u][0x%02X] begin()", busId_, addr_);
         if (!bme_.begin(addr_, &wire_)) {
-            Serial.printf("[BME688][bus %u][0x%02X] begin() FAILED\n", busId_, addr_);
+            Logger::error("[BME688][bus %u][0x%02X] begin() FAILED", busId_, addr_);
             return false;
         }
 
@@ -31,9 +32,9 @@ public:
 
     util::Result<app::Bme688Reading, app::SensorError> read() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[BME688][bus %u][0x%02X] read() start\n", busId_, addr_);
+        Logger::debug("[BME688][bus %u][0x%02X] read() start", busId_, addr_);
         if (!bme_.performReading()) {
-            Serial.printf("[BME688][bus %u][0x%02X] read() FAILED\n", busId_, addr_);
+            Logger::error("[BME688][bus %u][0x%02X] read() FAILED", busId_, addr_);
             return util::Result<app::Bme688Reading, app::SensorError>::Err(
                 app::SensorError::ReadFailed);
         }
@@ -45,7 +46,7 @@ public:
         reading.gasResistance = bme_.gas_resistance;
         reading.valid = true;
 
-        Serial.printf("[BME688][bus %u][0x%02X] T=%.2fC RH=%.2f%% P=%.0fPa Gas=%.0f\n",
+        Logger::debug("[BME688][bus %u][0x%02X] T=%.2fC RH=%.2f%% P=%.0fPa Gas=%.0f",
                       busId_, addr_, reading.tempC, reading.humidity,
                       reading.pressurePa, reading.gasResistance);
         return util::Result<app::Bme688Reading, app::SensorError>::Ok(reading);
