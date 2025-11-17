@@ -11,6 +11,15 @@ enum class LogLevel {
     ERROR
 };
 
+// Extract filename from full path (for concise logging)
+#define FILENAME (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
+// Logging macros that automatically capture file and line information
+#define LOG_DEBUG(...) Logger::log(LogLevel::DEBUG, FILENAME, __LINE__, __VA_ARGS__)
+#define LOG_INFO(...)  Logger::log(LogLevel::INFO,  FILENAME, __LINE__, __VA_ARGS__)
+#define LOG_WARN(...)  Logger::log(LogLevel::WARN,  FILENAME, __LINE__, __VA_ARGS__)
+#define LOG_ERROR(...) Logger::log(LogLevel::ERROR, FILENAME, __LINE__, __VA_ARGS__)
+
 // Simple logger class that wraps Serial output and optionally sends to MQTT
 //
 // Usage:
@@ -25,9 +34,9 @@ enum class LogLevel {
 //       return mqttClient.publish(topic, payload);
 //   });
 //
-//   Logger::info("This goes to serial and MQTT");
-//   Logger::error("This goes to serial and MQTT");
-//   Logger::debug("This only goes to serial");
+//   LOG_INFO("System initialized successfully");
+//   LOG_ERROR("Sensor failed: %s", errorMsg);
+//   LOG_DEBUG("Detailed sensor data: %d", value);
 class Logger {
 public:
     // Initialize the logger (call Serial.begin() externally)
@@ -70,57 +79,48 @@ public:
         mqttLogTopic_ = topic;
     }
 
-    // Log methods
-    static void debug(const char* message) {
-        log(LogLevel::DEBUG, message);
+    // Main logging method with file and line information
+    template<typename... Args>
+    static void log(LogLevel level, const char* file, int line, const char* format, Args... args) {
+        if (level < minLogLevel_) return;
+
+        // Format the message with file/line info
+        char formattedMessage[512];
+        uint32_t timestamp = millis();
+        const char* levelStr = getLevelString(level);
+
+        // Create formatted message: [timestamp][LEVEL][file:line] message
+        snprintf(formattedMessage, sizeof(formattedMessage), "[%u][%s][%s:%d] ",
+                timestamp, levelStr, file, line);
+
+        // Always log to Serial
+        Serial.print(formattedMessage);
+        Serial.printf(format, args...);
+        Serial.println();
+
+        // Also send to MQTT if enabled
+        sendToMqtt(level, file, line, format, args...);
     }
 
-    static void debug(const String& message) {
-        log(LogLevel::DEBUG, message.c_str());
-    }
-
+    // Legacy methods for backwards compatibility (deprecated - use LOG_* macros instead)
     template<typename... Args>
     static void debug(const char* format, Args... args) {
-        logFormatted(LogLevel::DEBUG, format, args...);
-    }
-
-    static void info(const char* message) {
-        log(LogLevel::INFO, message);
-    }
-
-    static void info(const String& message) {
-        log(LogLevel::INFO, message.c_str());
+        log(LogLevel::DEBUG, "unknown", 0, format, args...);
     }
 
     template<typename... Args>
     static void info(const char* format, Args... args) {
-        logFormatted(LogLevel::INFO, format, args...);
-    }
-
-    static void warn(const char* message) {
-        log(LogLevel::WARN, message);
-    }
-
-    static void warn(const String& message) {
-        log(LogLevel::WARN, message.c_str());
+        log(LogLevel::INFO, "unknown", 0, format, args...);
     }
 
     template<typename... Args>
     static void warn(const char* format, Args... args) {
-        logFormatted(LogLevel::WARN, format, args...);
-    }
-
-    static void error(const char* message) {
-        log(LogLevel::ERROR, message);
-    }
-
-    static void error(const String& message) {
-        log(LogLevel::ERROR, message.c_str());
+        log(LogLevel::WARN, "unknown", 0, format, args...);
     }
 
     template<typename... Args>
     static void error(const char* format, Args... args) {
-        logFormatted(LogLevel::ERROR, format, args...);
+        log(LogLevel::ERROR, "unknown", 0, format, args...);
     }
 
 private:
@@ -130,16 +130,29 @@ private:
     static inline std::function<bool(const char*, const String&)> mqttPublishCallback_ = nullptr;
     static inline String mqttLogTopic_ = "logs";
 
-    static void log(LogLevel level, const char* message) {
-        if (level < minLogLevel_) return;
+    template<typename... Args>
+    static void sendToMqtt(LogLevel level, const char* file, int line, const char* format, Args... args) {
+        if (!mqttLoggingEnabled_ || !mqttPublishCallback_ || mqttLogTopic_.isEmpty() || level < mqttMinLogLevel_) {
+            return;
+        }
 
+        // Rate limiting: don't send more than one message per second to avoid flooding
+        static uint32_t lastMqttLogTime = 0;
+        uint32_t now = millis();
+        if (now - lastMqttLogTime < 1000) {  // 1 second minimum interval
+            return;
+        }
+        lastMqttLogTime = now;
+
+        // Create MQTT payload with timestamp, level, file, and line
+        char payload[512];
         const char* levelStr = getLevelString(level);
+        char messagePart[256];
+        snprintf(messagePart, sizeof(messagePart), format, args...);
+        snprintf(payload, sizeof(payload), "[%u][%s][%s:%d] %s", now, levelStr, file, line, messagePart);
 
-        // Always log to Serial
-        Serial.printf("[%s] %s\n", levelStr, message);
-
-        // Also send to MQTT if enabled
-        sendToMqtt(level, message);
+        // Send to MQTT (ignore result to avoid blocking)
+        mqttPublishCallback_(mqttLogTopic_.c_str(), String(payload));
     }
 
     template<typename... Args>

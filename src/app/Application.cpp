@@ -18,9 +18,9 @@ Application::Application()
 void Application::setup() {
     Logger::begin(115200);
     delay(500);
-    Logger::info("=== ESP32 Air Quality Controller ===");
-    Logger::info("Firmware: %s", FIRMWARE_VERSION);
-    Logger::info("Chip ID: %llx", ESP.getEfuseMac());
+    LOG_INFO("=== ESP32 Air Quality Controller ===");
+    LOG_INFO("Firmware: %s", FIRMWARE_VERSION);
+    LOG_INFO("Chip ID: %llx", ESP.getEfuseMac());
 
     // Initialize configuration manager (must be first!)
     auto configResult = config_.begin();
@@ -54,7 +54,7 @@ void Application::setup() {
     // Register tasks
     registerTasks_();
 
-    Logger::info("=== Initialization Complete ===");
+    LOG_INFO("=== Initialization Complete ===");
 }
 
 void Application::loop() {
@@ -78,7 +78,7 @@ void Application::loop() {
 }
 
 void Application::initializeHardware_() {
-    Logger::info("Initializing hardware...");
+    LOG_INFO("Initializing hardware...");
 
     // Initialize sensor registry
     hal::initializeSensorRegistry();
@@ -88,7 +88,7 @@ void Application::initializeHardware_() {
     motor_->begin();
     motor_->setDirection(false);
     motor_->setPower(0.0f);
-    Logger::info("  Motor Controller: OK");
+    LOG_INFO("Motor Controller: OK");
 
     // Discover all I2C sensors on all buses (including onboard bus 0)
     discoverAllSensors_();
@@ -204,17 +204,17 @@ void Application::initializeOneWire_() {
 }
 
 void Application::connectWiFi_() {
-    Logger::info("Connecting to WiFi...");
+    LOG_INFO("Connecting to WiFi...");
 
     wifi_ = std::make_unique<services::WiFiManager>();
     auto result = wifi_->connect(config_.get().wifiCredentials);
 
     if (result.isOk()) {
-        Logger::info("Connected to: %s", wifi_->getConnectedSSID().c_str());
-        Logger::info("IP Address: %s", wifi_->getLocalIP().c_str());
-        Logger::info("RSSI: %d dBm", wifi_->getRSSI());
+        LOG_INFO("Connected to: %s", wifi_->getConnectedSSID().c_str());
+        LOG_INFO("IP Address: %s", wifi_->getLocalIP().c_str());
+        LOG_INFO("RSSI: %d dBm", wifi_->getRSSI());
     } else {
-        Logger::error("WiFi connection failed!");
+        LOG_ERROR("WiFi connection failed!");
         leds_->errorFlash();
     }
 }
@@ -385,13 +385,12 @@ void Application::readAndReportSensors_() {
     // Always continue to read I2C sensors below (removed early return)
 
     // Read all I2C sensors using unified interface
-    uint32_t timestamp = millis();
-    Logger::info("[%lu] Reading %zu sensors...", timestamp, sensors_.size());
+    LOG_INFO("Reading %zu sensors...", sensors_.size());
 
     for (const auto& sensor : sensors_) {
         if (!sensor->isConnected()) {
-            Logger::warn("[%lu] %s on bus %u: disconnected",
-                          timestamp, sensor->getTypeName(), sensor->getBusId());
+            LOG_WARN("%s on bus %u: disconnected",
+                     sensor->getTypeName(), sensor->getBusId());
             continue;
         }
 
@@ -406,9 +405,9 @@ void Application::readAndReportSensors_() {
             if (!error) {
                 JsonObject fields = doc.as<JsonObject>();
 
-                Logger::debug("[%lu] %s bus %u: %s",
-                              timestamp, sensor->getTypeName(), sensor->getBusId(),
-                              jsonFields.c_str());
+                LOG_DEBUG("%s bus %u: %s",
+                          sensor->getTypeName(), sensor->getBusId(),
+                          jsonFields.c_str());
 
                 // Send to telemetry with sensor's measurement name
                 auto serial = sensor->getSerial();
@@ -425,31 +424,31 @@ void Application::readAndReportSensors_() {
                                               sensor->getBusId(), fields, 0, sensorNameStr);
                 }
             } else {
-                Logger::error("[%lu] %s bus %u: JSON parse failed: %s",
-                              timestamp, sensor->getTypeName(), sensor->getBusId(),
-                              error.c_str());
+                LOG_ERROR("%s bus %u: JSON parse failed: %s",
+                          sensor->getTypeName(), sensor->getBusId(),
+                          error.c_str());
             }
         } else if (!jsonResult.isOk()) {
-            Logger::error("[%lu] %s bus %u: read failed",
-                          timestamp, sensor->getTypeName(), sensor->getBusId());
+            LOG_ERROR("%s bus %u: read failed",
+                      sensor->getTypeName(), sensor->getBusId());
         }
     }
 
     // Flush batch after collecting all sensor readings
     if (telemetry_) {
-        Logger::debug("[%lu] readAndReportSensors_: calling flushBatch", millis());
+        LOG_DEBUG("Calling flushBatch");
         telemetry_->flushBatch();
     }
 }
 
 void Application::handleMqttMessage_(const char* topic, float value) {
-    Logger::info("Handling MQTT: %s = %.3f", topic, value);
+    LOG_INFO("Handling MQTT: %s = %.3f", topic, value);
 
     const auto& cfg = config_.get();
     if (strcmp(topic, cfg.mqttTopicPowerCommand.c_str()) == 0) {
         if (motor_) {
             motor_->setFromMqtt(value);
-            Logger::info("Motor power set to: %.1f%%", value * 100.0f);
+            LOG_INFO("Motor power set to: %.1f%%", value * 100.0f);
         }
     }
 }
