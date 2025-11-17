@@ -25,7 +25,7 @@ void Application::setup() {
     // Initialize configuration manager (must be first!)
     auto configResult = config_.begin();
     if (configResult.isErr()) {
-        Logger::error("FATAL: Failed to initialize configuration!");
+        LOG_ERROR("FATAL: Failed to initialize configuration!");
         while (1) { delay(1000); }  // Halt
     }
 
@@ -98,7 +98,7 @@ void Application::initializeHardware_() {
 }
 
 void Application::discoverAllSensors_() {
-    Logger::info("Discovering sensors on all I2C buses...");
+    LOG_INFO("Discovering sensors on all I2C buses...");
 
     // Discover on ALL I2C buses (0-4), treating them equally
     // Bus 0 is the "onboard" bus, buses 1-4 are "external"
@@ -108,7 +108,7 @@ void Application::discoverAllSensors_() {
             continue; // Skip unconfigured buses
         }
 
-        Logger::info("=== I2C Bus %d (SDA=%d, SCL=%d) ===", busId, sda, scl);
+        LOG_INFO("=== I2C Bus %d (SDA=%d, SCL=%d) ===", busId, sda, scl);
 
         // Create bus and scan for devices
         auto bus = std::make_unique<hal::I2cBus>(sda, scl, busId);
@@ -119,31 +119,31 @@ void Application::discoverAllSensors_() {
 
         auto devices = bus->scan();
         if (devices.empty()) {
-            Logger::info("  No devices found on bus %d", busId);
+            LOG_INFO("  No devices found on bus %d", busId);
             continue;
         }
 
-        Logger::info("  Found %zu device(s):", devices.size());
+        LOG_INFO("  Found %zu device(s):", devices.size());
 
         // For each device address, try to match with registered sensors
         for (uint8_t addr : devices) {
-            Logger::info("    0x%02X: ", addr);
+            LOG_INFO("    0x%02X: ", addr);
 
             auto descriptors = hal::SensorRegistry::instance().findByAddress(addr);
 
             if (descriptors.empty()) {
-                Logger::info("unknown device");
+                LOG_INFO("unknown device");
                 continue;
             }
 
             // Try each matching descriptor until one succeeds
             bool initialized = false;
             for (const auto* desc : descriptors) {
-                Logger::info("trying %s... ", desc->typeName);
+                LOG_INFO("trying %s... ", desc->typeName);
 
                 auto sensor = desc->factory(*bus, addr);
                 if (sensor) {
-                    Logger::info("OK");
+                    LOG_INFO("OK");
 
                     // Check if sensor needs post-processing (e.g., ADC creates thermistors)
                     if (sensor->needsPostProcessing()) {
@@ -157,18 +157,18 @@ void Application::discoverAllSensors_() {
                     initialized = true;
                     break;
                 } else {
-                    Logger::info("failed, ");
+                    LOG_INFO("failed, ");
                 }
             }
 
             if (!initialized) {
-                Logger::info("all attempts failed");
+                LOG_INFO("all attempts failed");
             }
         }
     }
 
-    Logger::info("=== Sensor Discovery Complete ===");
-    Logger::info("Total sensors discovered: %zu", sensors_.size());
+    LOG_INFO("=== Sensor Discovery Complete ===");
+    LOG_INFO("Total sensors discovered: %zu", sensors_.size());
 
     // Print summary by type
     std::map<String, int> typeCounts;
@@ -177,14 +177,14 @@ void Application::discoverAllSensors_() {
         typeCounts[type]++;
     }
 
-    Logger::info("Sensor types:");
+    LOG_INFO("Sensor types:");
     for (const auto& [type, count] : typeCounts) {
-        Logger::info("  %s: %d", type.c_str(), count);
+        LOG_INFO("  %s: %d", type.c_str(), count);
     }
 }
 
 void Application::initializeOneWire_() {
-    Logger::info("Initializing OneWire buses...");
+    LOG_INFO("Initializing OneWire buses...");
 
     std::vector<std::pair<int, uint8_t>> oneWireConfigs = {
         {config::PIN_ONEWIRE_1, 0},
@@ -196,8 +196,8 @@ void Application::initializeOneWire_() {
     for (const auto& cfg : oneWireConfigs) {
         auto bus = std::make_unique<hal::OneWireBus>(cfg.first, cfg.second);
         if (bus->begin() && bus->getDeviceCount() > 0) {
-            Logger::info("  OneWire Bus %d: %d device(s)",
-                          cfg.second, bus->getDeviceCount());
+            LOG_INFO("  OneWire Bus %d: %d device(s)",
+                     cfg.second, bus->getDeviceCount());
             oneWireBuses_.push_back(std::move(bus));
         }
     }
@@ -220,7 +220,7 @@ void Application::connectWiFi_() {
 }
 
 void Application::initializeServices_() {
-    Logger::info("Initializing services...");
+    LOG_INFO("Initializing services...");
 
     // Initialize HTTPS client
     https_ = std::make_unique<services::HttpsClient>();
@@ -235,17 +235,6 @@ void Application::initializeServices_() {
     });
     mqtt_->setConfigCallback([this](const char* topic, const char* payload) {
         this->handleConfigMessage_(topic, payload);
-    });
-
-    // Enable MQTT logging (send INFO level and above to MQTT)
-    Logger::enableMqttLogging(true);
-    Logger::setMqttLogLevel(LogLevel::INFO);
-    Logger::setMqttLogTopic(String(cfg.deviceName) + "/logs");
-    Logger::setMqttCallback([this](const char* topic, const String& payload) -> bool {
-        if (mqtt_ && mqtt_->isConnected()) {
-            return mqtt_->publish(topic, payload, false);
-        }
-        return false;
     });
 
     // Initialize OTA
@@ -263,11 +252,11 @@ void Application::initializeServices_() {
     // Send boot report now that services are initialized
     sendBootReportAfterInit_();
 
-    Logger::info("Services initialized");
+    LOG_INFO("Services initialized");
 }
 
 void Application::registerTasks_() {
-    Logger::info("Registering tasks...");
+    LOG_INFO("Registering tasks...");
 
     scheduler_.addTask("heartbeat", [this]() {
         leds_->heartbeat();
@@ -289,7 +278,7 @@ void Application::registerTasks_() {
         ota_->checkForUpdate();
     }, config::TASK_FW_CHECK_MS);
 
-    Logger::info("Registered %zu tasks", scheduler_.taskCount());
+    LOG_INFO("Registered %zu tasks", scheduler_.taskCount());
 }
 
 void Application::sendBootReport_() {
@@ -454,20 +443,20 @@ void Application::handleMqttMessage_(const char* topic, float value) {
 }
 
 void Application::handleConfigMessage_(const char* topic, const char* payload) {
-    Logger::info("Config command: %s", payload);
+    LOG_INFO("Config command: %s", payload);
 
     // Parse JSON command
     StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, payload);
 
     if (error) {
-        Logger::error("Config JSON parse error: %s", error.c_str());
+        LOG_ERROR("Config JSON parse error: %s", error.c_str());
         return;
     }
 
     const char* cmd = doc["cmd"];
     if (!cmd) {
-        Logger::error("Missing 'cmd' field in config message");
+        LOG_ERROR("Missing 'cmd' field in config message");
         return;
     }
 
@@ -477,7 +466,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (name) {
             auto result = config_.setDeviceName(String(name));
             if (result.isOk()) {
-                Logger::info("Device name set to: %s", name);
+                LOG_INFO("Device name set to: %s", name);
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: Device name updated", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid device name", false);
@@ -490,7 +479,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (server) {
             auto result = config_.setMqttServer(String(server), port);
             if (result.isOk()) {
-                Logger::info("MQTT server set to: %s:%d (restart required)", server, port);
+                LOG_INFO("MQTT server set to: %s:%d (restart required)", server, port);
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: MQTT server updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid MQTT server", false);
@@ -504,7 +493,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (ssid && password) {
             auto result = config_.setWifiCredential(index, String(ssid), String(password));
             if (result.isOk()) {
-                Logger::info("WiFi %d set to: %s (restart required)", index, ssid);
+                LOG_INFO("WiFi %d set to: %s (restart required)", index, ssid);
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: WiFi updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid WiFi credentials", false);
@@ -517,7 +506,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (cmdTopic && statTopic) {
             auto result = config_.setMqttTopics(String(cmdTopic), String(statTopic));
             if (result.isOk()) {
-                Logger::info("MQTT topics updated (restart required)");
+                LOG_INFO("MQTT topics updated (restart required)");
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: Topics updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid topics", false);
@@ -530,7 +519,7 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
         if (influx && fwUpdate) {
             auto result = config_.setApiEndpoints(String(influx), String(fwUpdate));
             if (result.isOk()) {
-                Logger::info("API endpoints updated (restart required)");
+                LOG_INFO("API endpoints updated (restart required)");
                 mqtt_->publish((String(topic) + "/status").c_str(), "OK: API endpoints updated, restart required", false);
             } else {
                 mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid endpoints", false);
@@ -544,14 +533,14 @@ void Application::handleConfigMessage_(const char* topic, const char* payload) {
     else if (strcmp(cmd, "reset_config") == 0) {
         auto result = config_.resetToDefaults();
         if (result.isOk()) {
-            Logger::info("Config reset to defaults (restart required)");
+            LOG_INFO("Config reset to defaults (restart required)");
             mqtt_->publish((String(topic) + "/status").c_str(), "OK: Config reset, restart required", false);
         } else {
             mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Reset failed", false);
         }
     }
     else {
-        Logger::error("Unknown config command: %s", cmd);
+        LOG_ERROR("Unknown config command: %s", cmd);
         mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Unknown command", false);
     }
 }

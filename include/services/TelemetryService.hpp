@@ -86,7 +86,7 @@ public:
     void sendSensorData(const char* measurement, uint8_t busId,
                        const JsonObject& fields, uint64_t serialNum = 0, const String& sensorName = String()) {
         uint32_t timestamp = millis();
-        Logger::debug("[%u] sendSensorData: measurement=%s, busId=%u, sensorName=%s, doc capacity=%zu, doc usage=%zu",
+        LOG_DEBUG("sendSensorData: measurement=%s, busId=%u, sensorName=%s, doc capacity=%zu, doc usage=%zu",
                      timestamp, measurement, busId, sensorName.isEmpty() ? "null" : sensorName.c_str(), batchDoc_.capacity(), batchDoc_.memoryUsage());
         
 
@@ -99,14 +99,14 @@ public:
         // Verify the object was created (array size should increase)
         if (arraySizeAfter == arraySizeBefore) {
             // Object creation failed - document is likely full
-            Logger::error("[%u] sendSensorData: ERROR - failed to create nested object (doc full?), flushing and retrying", millis());
+            LOG_ERROR("sendSensorData: ERROR - failed to create nested object (doc full?), flushing and retrying");
             flushBatch();
             batchArray_ = batchDoc_.to<JsonArray>();
             doc = batchArray_.createNestedObject();
 
             // Check again
             if (batchArray_.size() == 0) {
-                Logger::error("[%u] sendSensorData: ERROR - still failed after flush, skipping this measurement", millis());
+                LOG_ERROR("sendSensorData: ERROR - still failed after flush, skipping this measurement");
                 return;
             }
         }
@@ -125,7 +125,7 @@ public:
 
         if (!sensorName.isEmpty()) {
             tags["sensor_name"] = sensorName;  // String object will be copied by ArduinoJson
-            Logger::debug("[%u] sendSensorData: set sensor_name tag to '%s'", millis(), sensorName.c_str());
+            LOG_DEBUG("sendSensorData: set sensor_name tag to '%s'", sensorName.c_str());
         }
 
         // Copy fields - need to copy from source JsonObject to new one
@@ -199,17 +199,17 @@ public:
                 docFields[keyCopy] = value;
             }
             fieldCount++;
-            Logger::debug("[%u] sendSensorData: copied field %s", millis(), keyCopy.c_str());
+            LOG_DEBUG("sendSensorData: copied field %s", keyCopy.c_str());
         }
 
-        Logger::debug("[%u] sendSensorData: copied %zu fields from source", millis(), fieldCount);
+        LOG_DEBUG("sendSensorData: copied %zu fields from source", fieldCount);
 
         // Always add timestamp - ensures at least one field (InfluxDB requirement)
         docFields["arduino_millis"] = timestamp;
 
         // Verify fields were actually set by checking if they exist
         size_t verifiedCount = docFields.size();
-        Logger::debug("[%u] sendSensorData: verified %zu fields in docFields, doc usage=%zu",
+        LOG_DEBUG("sendSensorData: verified %zu fields in docFields, doc usage=%zu",
                      millis(), verifiedCount, batchDoc_.memoryUsage());
     }
 
@@ -269,18 +269,18 @@ public:
         uint32_t timestamp = millis();
         size_t arraySize = batchArray_.size();
         size_t docUsage = batchDoc_.memoryUsage();
-        Logger::debug("[%u] flushBatch: batchArray size=%zu, doc usage=%zu/%zu",
+        LOG_DEBUG("flushBatch: batchArray size=%zu, doc usage=%zu/%zu",
                      timestamp, arraySize, docUsage, batchDoc_.capacity());
 
         if (arraySize == 0) {
             // Even if array is empty, if document is nearly full, we should clear it
             // to free memory for future operations
             if (docUsage > batchDoc_.capacity() * 0.8) {
-                Logger::debug("[%u] flushBatch: array empty but doc nearly full, clearing document", millis());
+                LOG_DEBUG("flushBatch: array empty but doc nearly full, clearing document");
                 batchDoc_.clear();
                 batchArray_ = batchDoc_.to<JsonArray>();
             } else {
-                Logger::debug("[%u] flushBatch: nothing to send, returning", millis());
+                LOG_DEBUG("flushBatch: nothing to send, returning");
             }
             return;  // Nothing to send
         }
@@ -290,8 +290,8 @@ public:
         // Force floating point precision to ensure 0.0 doesn't serialize as 0
         serializeJson(batchArray_, jsonData);
 
-        Logger::debug("[%u] flushBatch: serialized %zu bytes, %zu points", millis(), jsonData.length(), batchSize);
-        Logger::debug("[%u] flushBatch: JSON data: %s", millis(), jsonData.c_str());
+        LOG_DEBUG("flushBatch: serialized %zu bytes, %zu points", jsonData.length(), batchSize);
+        LOG_DEBUG("flushBatch: JSON data: %s", jsonData.c_str());
 
         // Clear the batch for next use before sending (in case send fails)
         batchArray_.clear();
@@ -304,15 +304,14 @@ public:
 
 private:
     void sendData(const String& jsonData, size_t batchSize) {
-        uint32_t timestamp = millis();
-        Logger::debug("[%u] sendData: sending batch of %zu points", timestamp, batchSize);
+        LOG_DEBUG("sendData: sending batch of %zu points", batchSize);
 
         auto result = httpsClient_.post(apiEndpoint_.c_str(), jsonData);
 
         if (result.isOk()) {
-            Logger::info("[%u] Telemetry batch sent successfully (%zu points)", millis(), batchSize);
+            LOG_INFO("Telemetry batch sent successfully (%zu points)", batchSize);
         } else {
-            Logger::error("[%u] Failed to send telemetry batch", millis());
+            LOG_ERROR("Failed to send telemetry batch");
             // Could flash error LED here
         }
     }

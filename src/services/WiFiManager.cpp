@@ -18,13 +18,13 @@ util::Result<void, app::WiFiError> WiFiManager::connect(const std::vector<WiFiCr
     // Find best matching network
     auto bestNetwork = selectBestNetwork(scanResults, credentials);
     if (!bestNetwork) {
-        Logger::error("No known networks found");
+        LOG_ERROR("No known networks found");
         return util::Result<void, app::WiFiError>::Err(app::WiFiError::ConnectionFailed);
     }
 
     // Connect to selected network
-    Logger::info("Connecting to %s (RSSI: %d, Ch: %u)...",
-                  bestNetwork->ssid.c_str(), bestNetwork->rssi, bestNetwork->channel);
+    LOG_INFO("Connecting to %s (RSSI: %d, Ch: %u)...",
+              bestNetwork->ssid.c_str(), bestNetwork->rssi, bestNetwork->channel);
 
     // Prefer a specific BSSID to ensure strongest AP for SSID
     WiFi.begin(bestNetwork->ssid.c_str(),
@@ -42,7 +42,7 @@ util::Result<void, app::WiFiError> WiFiManager::connect(const std::vector<WiFiCr
     }
 
     connectedSsid_ = bestNetwork->ssid;
-    Logger::info("Connected! IP: %s", WiFi.localIP().toString().c_str());
+    LOG_INFO("Connected! IP: %s", WiFi.localIP().toString().c_str());
 
     return util::Result<void, app::WiFiError>::Ok();
 }
@@ -69,7 +69,7 @@ std::vector<app::WiFiScanResult> WiFiManager::scanNetworks() {
     delay(100);
 
     int n = WiFi.scanNetworks();
-    Logger::info("WiFi scan found %d networks", n);
+    LOG_INFO("WiFi scan found %d networks", n);
 
     for (int i = 0; i < n; i++) {
         app::WiFiScanResult result;
@@ -88,7 +88,7 @@ std::vector<app::WiFiScanResult> WiFiManager::scanNetworks() {
         }
 
         results.push_back(result);
-        Logger::debug("  %s (RSSI: %d, Ch: %d)",
+        LOG_DEBUG("  %s (RSSI: %d, Ch: %d)",
                       result.ssid.c_str(), result.rssi, result.channel);
     }
 
