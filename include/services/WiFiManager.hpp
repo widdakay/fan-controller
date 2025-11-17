@@ -2,6 +2,7 @@
 #include "Config.hpp"
 #include "app/Types.hpp"
 #include "util/Result.hpp"
+#include "services/ConfigManager.hpp"
 #include <WiFi.h>
 #include <vector>
 #include <algorithm>
@@ -15,7 +16,8 @@ public:
     WiFiManager() = default;
 
     // Scan and connect to best available network
-    util::Result<void, app::WiFiError> connect();
+    // Credentials are passed at connection time
+    util::Result<void, app::WiFiError> connect(const std::vector<WiFiCredential>& credentials);
 
     bool isConnected() const {
         return WiFi.status() == WL_CONNECTED;
@@ -43,7 +45,8 @@ private:
 
     std::vector<app::WiFiScanResult> scanNetworks();
     std::optional<NetworkMatch> selectBestNetwork(
-        const std::vector<app::WiFiScanResult>& scanResults);
+        const std::vector<app::WiFiScanResult>& scanResults,
+        const std::vector<WiFiCredential>& credentials);
 
     std::string connectedSsid_;
     std::vector<app::WiFiScanResult> lastScanResults_;

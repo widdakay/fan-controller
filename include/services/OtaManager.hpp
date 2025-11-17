@@ -16,7 +16,7 @@ public:
 
     explicit OtaManager(HttpsClient& httpsClient, WatchdogService& watchdog);
 
-    void begin();
+    void begin(const String& deviceName, const String& fwUpdateUrl);
     void setOtaCallback(OtaCallback callback);
 
     void handle() {
@@ -30,6 +30,8 @@ private:
     WatchdogService& watchdog_;
     util::Timer firmwareCheckTimer_;
     OtaCallback otaCallback_;
+    String deviceName_;
+    String fwUpdateUrl_;
 };
 
 } // namespace services

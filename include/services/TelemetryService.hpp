@@ -10,8 +10,8 @@ namespace services {
 
 class TelemetryService {
 public:
-    explicit TelemetryService(HttpsClient& httpsClient)
-        : httpsClient_(httpsClient) {
+    explicit TelemetryService(HttpsClient& httpsClient, const String& deviceName, const String& apiEndpoint)
+        : httpsClient_(httpsClient), deviceName_(deviceName), apiEndpoint_(apiEndpoint) {
         batchArray_ = batchDoc_.to<JsonArray>();
     }
 
@@ -22,7 +22,7 @@ public:
 
         // Tags
         JsonObject tags = doc.createNestedObject("tags");
-        tags["device"] = config::DEVICE_NAME;
+        tags["device"] = deviceName_;
         tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
 
         // Fields
@@ -114,7 +114,7 @@ public:
 
         // Tags
         JsonObject tags = doc.createNestedObject("tags");
-        tags["device"] = config::DEVICE_NAME;
+        tags["device"] = deviceName_;
         tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
         tags["bus_id"] = busId;
 
@@ -221,7 +221,7 @@ public:
             doc["measurement"] = "onewire_temp";
 
             JsonObject tags = doc.createNestedObject("tags");
-            tags["device"] = config::DEVICE_NAME;
+            tags["device"] = deviceName_;
             tags["chip_id"] = String((uint64_t)ESP.getEfuseMac(), HEX);
             tags["bus_id"] = reading.busId;
             char addrStr[17];
@@ -242,7 +242,7 @@ public:
         doc["measurement"] = "ESP_Boot";
 
         JsonObject tags = doc.createNestedObject("tags");
-        tags["device"] = config::DEVICE_NAME;
+        tags["device"] = deviceName_;
         tags["chip_id"] = String((uint64_t)boot.chipId, HEX);
 
         JsonObject fields = doc.createNestedObject("fields");
@@ -306,7 +306,7 @@ private:
         uint32_t timestamp = millis();
         Serial.printf("[%u] sendData: sending batch of %zu points\n", timestamp, batchSize);
         
-        auto result = httpsClient_.post(config::API_INFLUXDB, jsonData);
+        auto result = httpsClient_.post(apiEndpoint_.c_str(), jsonData);
 
         if (result.isOk()) {
             Serial.printf("[%lu] Telemetry batch sent successfully (%zu points)\n", millis(), batchSize);
@@ -319,6 +319,8 @@ private:
     HttpsClient& httpsClient_;
     StaticJsonDocument<8192> batchDoc_;
     JsonArray batchArray_;
+    String deviceName_;
+    String apiEndpoint_;
 };
 
 } // namespace services

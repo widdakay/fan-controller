@@ -7,7 +7,10 @@
       "Bash(rmdir:*)",
       "Bash(tree:*)",
       "Bash(pio device list:*)",
-      "Bash(pio test:*)"
+      "Bash(pio test:*)",
+      "Bash(python3 nvs_partition_gen.py:*)",
+      "Bash(~/.platformio/penv/bin/python:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []

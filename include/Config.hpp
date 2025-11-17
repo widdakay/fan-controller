@@ -160,7 +160,7 @@ inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/particle/f
 
 // MQTT Configuration
 inline constexpr uint16_t MQTT_PORT = 1883;
-inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard3 /fan1/power";
+inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard3/fan1/power";
 inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard3/fan1/power/status";
 
 // Device identification

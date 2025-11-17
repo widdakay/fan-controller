@@ -12,11 +12,16 @@ namespace services {
 class MqttClient {
 public:
     using MessageCallback = std::function<void(const char* topic, float value)>;
+    using ConfigCallback = std::function<void(const char* topic, const char* payload)>;
 
     explicit MqttClient(WiFiClient& wifiClient);
 
-    void begin();
+    // Initialize with dynamic configuration
+    void begin(const String& server, uint16_t port,
+               const String& commandTopic, const String& statusTopic);
+
     void setMessageCallback(MessageCallback callback);
+    void setConfigCallback(ConfigCallback callback);
     void loop();
     bool publish(const char* topic, const String& payload, bool retained = false);
     bool publishPowerStatus(float powerLevel);
@@ -32,6 +37,14 @@ private:
     PubSubClient client_;
     util::Timer reconnectTimer_;
     MessageCallback userCallback_;
+    ConfigCallback configCallback_;
+
+    // MQTT configuration
+    String mqttServer_;
+    uint16_t mqttPort_;
+    String topicCommandPower_;
+    String topicStatusPower_;
+    String topicConfig_;
 };
 
 } // namespace services

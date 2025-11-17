@@ -7,6 +7,7 @@
 #include "hal/I2cBus.hpp"
 #include "hal/OneWireBus.hpp"
 #include "hal/sensors/AllSensors.hpp"
+#include "services/ConfigManager.hpp"
 #include "services/WiFiManager.hpp"
 #include "services/MqttClient.hpp"
 #include "services/HttpsClient.hpp"
@@ -50,6 +51,7 @@ private:
     // ========================================================================
     // Services
     // ========================================================================
+    services::ConfigManager config_;
     services::WatchdogService watchdog_;
     std::unique_ptr<services::WiFiManager> wifi_;
     WiFiClient wifiClient_;
@@ -87,6 +89,7 @@ private:
     void publishMqttStatus_();
     void readAndReportSensors_();
     void handleMqttMessage_(const char* topic, float value);
+    void handleConfigMessage_(const char* topic, const char* payload);
 };
 
 } // namespace app

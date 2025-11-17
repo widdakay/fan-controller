@@ -7,9 +7,12 @@ OtaManager::OtaManager(HttpsClient& httpsClient, WatchdogService& watchdog)
       watchdog_(watchdog),
       firmwareCheckTimer_(config::TASK_FW_CHECK_MS) {}
 
-void OtaManager::begin() {
+void OtaManager::begin(const String& deviceName, const String& fwUpdateUrl) {
+    deviceName_ = deviceName;
+    fwUpdateUrl_ = fwUpdateUrl;
+
     // Setup Arduino OTA
-    ArduinoOTA.setHostname(config::DEVICE_NAME);
+    ArduinoOTA.setHostname(deviceName_.c_str());
 
     ArduinoOTA.onStart([this]() {
         Serial.println("OTA Update Starting...");
@@ -68,7 +71,7 @@ void OtaManager::checkForUpdate() {
     serializeJson(doc, jsonRequest);
 
     // Check if update available
-    auto response = httpsClient_.post(config::API_FW_UPDATE, jsonRequest);
+    auto response = httpsClient_.post(fwUpdateUrl_.c_str(), jsonRequest);
 
     if (response.isOk()) {
         String responseStr = response.value();

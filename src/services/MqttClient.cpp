@@ -5,8 +5,15 @@ namespace services {
 MqttClient::MqttClient(WiFiClient& wifiClient)
     : client_(wifiClient), reconnectTimer_(config::MQTT_RECONNECT_INTERVAL_MS) {}
 
-void MqttClient::begin() {
-    client_.setServer(config::MQTT_SERVER, config::MQTT_PORT);
+void MqttClient::begin(const String& server, uint16_t port,
+                       const String& commandTopic, const String& statusTopic) {
+    mqttServer_ = server;
+    mqttPort_ = port;
+    topicCommandPower_ = commandTopic;
+    topicStatusPower_ = statusTopic;
+    topicConfig_ = commandTopic.substring(0, commandTopic.lastIndexOf('/')) + "/config";
+
+    client_.setServer(mqttServer_.c_str(), mqttPort_);
     client_.setCallback([this](char* topic, byte* payload, unsigned int length) {
         this->messageCallback(topic, payload, length);
     });
@@ -14,6 +21,10 @@ void MqttClient::begin() {
 
 void MqttClient::setMessageCallback(MessageCallback callback) {
     userCallback_ = callback;
+}
+
+void MqttClient::setConfigCallback(ConfigCallback callback) {
+    configCallback_ = callback;
 }
 
 void MqttClient::loop() {
@@ -36,7 +47,7 @@ bool MqttClient::publish(const char* topic, const String& payload, bool retained
 bool MqttClient::publishPowerStatus(float powerLevel) {
     char buffer[16];
     snprintf(buffer, sizeof(buffer), "%.3f", powerLevel);
-    return publish(config::MQTT_TOPIC_POWER_STATUS, buffer, false);
+    return publish(topicStatusPower_.c_str(), buffer, false);
 }
 
 void MqttClient::reconnect() {
@@ -54,8 +65,12 @@ void MqttClient::reconnect() {
         Serial.println(" connected");
 
         // Subscribe to power command topic
-        client_.subscribe(config::MQTT_TOPIC_POWER_COMMAND);
-        Serial.printf("Subscribed to %s\n", config::MQTT_TOPIC_POWER_COMMAND);
+        client_.subscribe(topicCommandPower_.c_str());
+        Serial.printf("Subscribed to %s\n", topicCommandPower_.c_str());
+
+        // Subscribe to config topic
+        client_.subscribe(topicConfig_.c_str());
+        Serial.printf("Subscribed to %s\n", topicConfig_.c_str());
     } else {
         Serial.printf(" failed, rc=%d\n", client_.state());
     }
@@ -69,7 +84,15 @@ void MqttClient::messageCallback(char* topic, byte* payload, unsigned int length
 
     Serial.printf("MQTT message: %s = %s\n", topic, buffer);
 
-    // Parse as float
+    // Check if this is a config message
+    if (strcmp(topic, topicConfig_.c_str()) == 0) {
+        if (configCallback_) {
+            configCallback_(topic, buffer);
+        }
+        return;
+    }
+
+    // Otherwise, parse as float for power command
     float value = atof(buffer);
 
     // Clamp to 0.0-1.0

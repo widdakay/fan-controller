@@ -1,0 +1,32 @@
+{
+  "_comment": "ESP32 Device Configuration File",
+
+  "device_name": "UnderHouseFan",
+  "topic_prefix": "home",
+
+  "wifi_networks": [
+    {
+      "ssid": "CasaDelVista",
+      "password": "536oakpark"
+    },
+    {
+      "ssid": "BlockbusterFreeWiFi",
+      "password": "LetsWatchAMovie"
+    }
+  ],
+
+  "mqtt_server": "10.10.1.20",
+  "mqtt_port": 1883,
+
+  "mqtt_topics": {
+    "command": "home/fan1/power",
+    "status": "home/fan1/power/status"
+  },
+
+  "api_endpoints": {
+    "influxdb": "https://data.yoerik.com/particle/log",
+    "firmware": "https://data.yoerik.com/particle/fw/update"
+  },
+
+  "base_topic": "home/fan1"
+}

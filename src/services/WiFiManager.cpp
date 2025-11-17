@@ -1,9 +1,10 @@
 #include "services/WiFiManager.hpp"
+#include "services/ConfigManager.hpp"
 
 namespace services {
 
-util::Result<void, app::WiFiError> WiFiManager::connect() {
-    if (config::WIFI_CREDENTIALS.empty()) {
+util::Result<void, app::WiFiError> WiFiManager::connect(const std::vector<WiFiCredential>& credentials) {
+    if (credentials.empty()) {
         return util::Result<void, app::WiFiError>::Err(app::WiFiError::NoCredentials);
     }
 
@@ -14,7 +15,7 @@ util::Result<void, app::WiFiError> WiFiManager::connect() {
     }
 
     // Find best matching network
-    auto bestNetwork = selectBestNetwork(scanResults);
+    auto bestNetwork = selectBestNetwork(scanResults, credentials);
     if (!bestNetwork) {
         Serial.println("No known networks found");
         return util::Result<void, app::WiFiError>::Err(app::WiFiError::ConnectionFailed);
@@ -97,18 +98,19 @@ std::vector<app::WiFiScanResult> WiFiManager::scanNetworks() {
 }
 
 std::optional<WiFiManager::NetworkMatch> WiFiManager::selectBestNetwork(
-    const std::vector<app::WiFiScanResult>& scanResults) {
+    const std::vector<app::WiFiScanResult>& scanResults,
+    const std::vector<WiFiCredential>& credentials) {
 
     std::optional<NetworkMatch> best;
     int8_t bestRssi = -100;
 
     // Find configured network with best signal
-    for (const auto& cred : config::WIFI_CREDENTIALS) {
+    for (const auto& cred : credentials) {
         for (const auto& scan : scanResults) {
-            if (scan.ssid == cred.ssid && scan.rssi > bestRssi) {
+            if (scan.ssid == cred.ssid.c_str() && scan.rssi > bestRssi) {
                 NetworkMatch match;
-                match.ssid = cred.ssid;
-                match.password = cred.password;
+                match.ssid = cred.ssid.c_str();
+                match.password = cred.password.c_str();
                 match.rssi = scan.rssi;
                 match.channel = scan.channel;
                 match.bssid = scan.bssid;

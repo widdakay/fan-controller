@@ -48,6 +48,13 @@ enum class MqttError {
     SubscribeFailed
 };
 
+enum class ConfigError {
+    NvsOpenFailed,
+    NvsReadFailed,
+    NvsWriteFailed,
+    InvalidValue
+};
+
 // ============================================================================
 // Hardware Reading Types
 // ============================================================================

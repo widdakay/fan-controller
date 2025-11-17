@@ -21,6 +21,16 @@ void Application::setup() {
     Serial.printf("Firmware: %s\n", FIRMWARE_VERSION);
     Serial.printf("Chip ID: %llx\n", ESP.getEfuseMac());
 
+    // Initialize configuration manager (must be first!)
+    auto configResult = config_.begin();
+    if (configResult.isErr()) {
+        Serial.println("FATAL: Failed to initialize configuration!");
+        while (1) { delay(1000); }  // Halt
+    }
+
+    // Print current configuration
+    config_.printConfig();
+
     // Initialize watchdog
     watchdog_.begin();
 
@@ -196,7 +206,7 @@ void Application::connectWiFi_() {
     Serial.println("Connecting to WiFi...");
 
     wifi_ = std::make_unique<services::WiFiManager>();
-    auto result = wifi_->connect();
+    auto result = wifi_->connect(config_.get().wifiCredentials);
 
     if (result.isOk()) {
         Serial.printf("Connected to: %s\n", wifi_->getConnectedSSID().c_str());
@@ -216,20 +226,27 @@ void Application::initializeServices_() {
 
     // Initialize MQTT
     mqtt_ = std::make_unique<services::MqttClient>(wifiClient_);
-    mqtt_->begin();
+    const auto& cfg = config_.get();
+    mqtt_->begin(cfg.mqttServer, cfg.mqttPort,
+                 cfg.mqttTopicPowerCommand, cfg.mqttTopicPowerStatus);
     mqtt_->setMessageCallback([this](const char* topic, float value) {
         this->handleMqttMessage_(topic, value);
+    });
+    mqtt_->setConfigCallback([this](const char* topic, const char* payload) {
+        this->handleConfigMessage_(topic, payload);
     });
 
     // Initialize OTA
     ota_ = std::make_unique<services::OtaManager>(*https_, watchdog_);
-    ota_->begin();
+    ota_->begin(cfg.deviceName, cfg.apiFirmwareUpdate);
     ota_->setOtaCallback([this](bool active) {
         leds_->setOtaStatus(active);
     });
 
     // Initialize telemetry
-    telemetry_ = std::make_unique<services::TelemetryService>(*https_);
+    telemetry_ = std::make_unique<services::TelemetryService>(*https_,
+                                                               cfg.deviceName,
+                                                               cfg.apiInfluxDb);
 
     // Send boot report now that services are initialized
     sendBootReportAfterInit_();
@@ -416,11 +433,115 @@ void Application::readAndReportSensors_() {
 void Application::handleMqttMessage_(const char* topic, float value) {
     Serial.printf("Handling MQTT: %s = %.3f\n", topic, value);
 
-    if (strcmp(topic, config::MQTT_TOPIC_POWER_COMMAND) == 0) {
+    const auto& cfg = config_.get();
+    if (strcmp(topic, cfg.mqttTopicPowerCommand.c_str()) == 0) {
         if (motor_) {
             motor_->setFromMqtt(value);
             Serial.printf("Motor power set to: %.1f%%\n", value * 100.0f);
         }
+    }
+}
+
+void Application::handleConfigMessage_(const char* topic, const char* payload) {
+    Serial.printf("Config command: %s\n", payload);
+
+    // Parse JSON command
+    StaticJsonDocument<512> doc;
+    DeserializationError error = deserializeJson(doc, payload);
+
+    if (error) {
+        Serial.printf("Config JSON parse error: %s\n", error.c_str());
+        return;
+    }
+
+    const char* cmd = doc["cmd"];
+    if (!cmd) {
+        Serial.println("Missing 'cmd' field in config message");
+        return;
+    }
+
+    // Handle different configuration commands
+    if (strcmp(cmd, "set_device_name") == 0) {
+        const char* name = doc["name"];
+        if (name) {
+            auto result = config_.setDeviceName(String(name));
+            if (result.isOk()) {
+                Serial.printf("Device name set to: %s\n", name);
+                mqtt_->publish((String(topic) + "/status").c_str(), "OK: Device name updated", false);
+            } else {
+                mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid device name", false);
+            }
+        }
+    }
+    else if (strcmp(cmd, "set_mqtt_server") == 0) {
+        const char* server = doc["server"];
+        uint16_t port = doc["port"] | 1883;
+        if (server) {
+            auto result = config_.setMqttServer(String(server), port);
+            if (result.isOk()) {
+                Serial.printf("MQTT server set to: %s:%d (restart required)\n", server, port);
+                mqtt_->publish((String(topic) + "/status").c_str(), "OK: MQTT server updated, restart required", false);
+            } else {
+                mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid MQTT server", false);
+            }
+        }
+    }
+    else if (strcmp(cmd, "set_wifi") == 0) {
+        uint8_t index = doc["index"] | 0;
+        const char* ssid = doc["ssid"];
+        const char* password = doc["password"];
+        if (ssid && password) {
+            auto result = config_.setWifiCredential(index, String(ssid), String(password));
+            if (result.isOk()) {
+                Serial.printf("WiFi %d set to: %s (restart required)\n", index, ssid);
+                mqtt_->publish((String(topic) + "/status").c_str(), "OK: WiFi updated, restart required", false);
+            } else {
+                mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid WiFi credentials", false);
+            }
+        }
+    }
+    else if (strcmp(cmd, "set_mqtt_topics") == 0) {
+        const char* cmdTopic = doc["command"];
+        const char* statTopic = doc["status"];
+        if (cmdTopic && statTopic) {
+            auto result = config_.setMqttTopics(String(cmdTopic), String(statTopic));
+            if (result.isOk()) {
+                Serial.printf("MQTT topics updated (restart required)\n");
+                mqtt_->publish((String(topic) + "/status").c_str(), "OK: Topics updated, restart required", false);
+            } else {
+                mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid topics", false);
+            }
+        }
+    }
+    else if (strcmp(cmd, "set_api_endpoints") == 0) {
+        const char* influx = doc["influxdb"];
+        const char* fwUpdate = doc["firmware"];
+        if (influx && fwUpdate) {
+            auto result = config_.setApiEndpoints(String(influx), String(fwUpdate));
+            if (result.isOk()) {
+                Serial.printf("API endpoints updated (restart required)\n");
+                mqtt_->publish((String(topic) + "/status").c_str(), "OK: API endpoints updated, restart required", false);
+            } else {
+                mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Invalid endpoints", false);
+            }
+        }
+    }
+    else if (strcmp(cmd, "print_config") == 0) {
+        config_.printConfig();
+        mqtt_->publish((String(topic) + "/status").c_str(), "OK: Config printed to serial", false);
+    }
+    else if (strcmp(cmd, "reset_config") == 0) {
+        auto result = config_.resetToDefaults();
+        if (result.isOk()) {
+            Serial.println("Config reset to defaults (restart required)");
+            mqtt_->publish((String(topic) + "/status").c_str(), "OK: Config reset, restart required", false);
+        } else {
+            mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Reset failed", false);
+        }
+    }
+    else {
+        Serial.printf("Unknown config command: %s\n", cmd);
+        mqtt_->publish((String(topic) + "/status").c_str(), "ERROR: Unknown command", false);
     }
 }
 

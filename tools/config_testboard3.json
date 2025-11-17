@@ -1,0 +1,32 @@
+{
+  "_comment": "TestBoard3 Configuration",
+
+  "device_name": "TestBoard3",
+  "topic_prefix": "testboard3",
+
+  "wifi_networks": [
+    {
+      "ssid": "CasaDelVista",
+      "password": "536oakpark"
+    },
+    {
+      "ssid": "BlockbusterFreeWiFi",
+      "password": "LetsWatchAMovie"
+    }
+  ],
+
+  "mqtt_server": "10.10.1.20",
+  "mqtt_port": 1883,
+
+  "mqtt_topics": {
+    "command": "testboard3/fan1/power",
+    "status": "testboard3/fan1/power/status"
+  },
+
+  "api_endpoints": {
+    "influxdb": "https://data.yoerik.com/particle/log",
+    "firmware": "https://data.yoerik.com/particle/fw/update"
+  },
+
+  "base_topic": "testboard3/fan1"
+}
