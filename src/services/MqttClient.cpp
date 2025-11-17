@@ -15,7 +15,7 @@ void MqttClient::begin(const String& server, uint16_t port,
     topicConfig_ = commandTopic.substring(0, commandTopic.lastIndexOf('/')) + "/config";
 
     client_.setServer(mqttServer_.c_str(), mqttPort_);
-    client_.setKeepAlive(60);  // 60 second keepalive
+    client_.setKeepAlive(10);  // 10 second keepalive (more aggressive)
     client_.setCallback([this](char* topic, byte* payload, unsigned int length) {
         this->messageCallback(topic, payload, length);
     });
@@ -31,13 +31,21 @@ void MqttClient::setConfigCallback(ConfigCallback callback) {
 
 void MqttClient::loop() {
     // Always call client.loop() to handle MQTT protocol and detect disconnections
-    client_.loop();
+    int loopResult = client_.loop();
 
     // Check if we need to reconnect
     if (!client_.connected()) {
         if (reconnectTimer_.check()) {
-            LOG_WARN("MQTT disconnected, attempting reconnect...");
+            LOG_WARN("MQTT disconnected (state: %d), attempting reconnect...", client_.state());
             reconnect();
+        }
+    } else {
+        // Debug: Log MQTT state occasionally (every 10 seconds)
+        static uint32_t lastStateLog = 0;
+        uint32_t now = millis();
+        if (now - lastStateLog > 10000) {
+            LOG_DEBUG("MQTT connected, state: %d", client_.state());
+            lastStateLog = now;
         }
     }
 }
@@ -63,11 +71,12 @@ void MqttClient::reconnect() {
 
     LOG_INFO("Connecting to MQTT...");
 
-    // Generate client ID from chip ID
-    String clientId = "ESP32-";
+    // Generate client ID from chip ID (keep it short and simple)
+    String clientId = "ESP32_";
     clientId += String((uint32_t)ESP.getEfuseMac(), HEX);
 
-    if (client_.connect(clientId.c_str())) {
+    // Try connecting with clean session and will message
+    if (client_.connect(clientId.c_str(), "testboard3/status", 0, true, "offline")) {
         LOG_INFO("MQTT connected successfully");
 
         // Subscribe to power command topic
@@ -77,6 +86,9 @@ void MqttClient::reconnect() {
         // Subscribe to config topic
         client_.subscribe(topicConfig_.c_str());
         LOG_INFO("Subscribed to %s", topicConfig_.c_str());
+
+        // Publish online status
+        client_.publish("testboard3/status", "online", true);
     } else {
         LOG_ERROR("MQTT connection failed, rc=%d", client_.state());
     }
