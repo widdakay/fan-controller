@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "Config.hpp"
 #include "hal/I2cSwitcher.hpp"
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -15,7 +16,7 @@ public:
 
     bool begin() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[AHT20][bus %u][0x%02X] begin()\n", busId_, addr_);
+        LOG_DEBUG("[AHT20][bus %u][0x%02X] begin()", busId_, addr_);
 
         // Wait 40ms after power-on
         delay(40);
@@ -23,13 +24,13 @@ public:
         // Probe device presence
         wire_.beginTransmission(addr_);
         if (wire_.endTransmission() != 0) {
-            Serial.printf("[AHT20][bus %u][0x%02X] probe FAILED\n", busId_, addr_);
+            LOG_ERROR("[AHT20][bus %u][0x%02X] probe FAILED", busId_, addr_);
             return false;
         }
 
         // Check status and calibration
         if (!checkStatus_()) {
-            Serial.printf("[AHT20][bus %u][0x%02X] status check FAILED\n", busId_, addr_);
+            LOG_ERROR("[AHT20][bus %u][0x%02X] status check FAILED", busId_, addr_);
             return false;
         }
 
@@ -37,21 +38,21 @@ public:
         uint8_t status = readStatus_();
         if ((status & 0x08) == 0) {
             // Not calibrated - send initialization command
-            Serial.printf("[AHT20][bus %u][0x%02X] not calibrated, initializing...\n", busId_, addr_);
+            LOG_INFO("[AHT20][bus %u][0x%02X] not calibrated, initializing...", busId_, addr_);
             if (!initialize_()) {
-                Serial.printf("[AHT20][bus %u][0x%02X] initialization FAILED\n", busId_, addr_);
+                LOG_ERROR("[AHT20][bus %u][0x%02X] initialization FAILED", busId_, addr_);
                 return false;
             }
             delay(10);
         }
 
-        Serial.printf("[AHT20][bus %u][0x%02X] initialized successfully\n", busId_, addr_);
+        LOG_INFO("[AHT20][bus %u][0x%02X] initialized successfully", busId_, addr_);
         return true;
     }
 
     util::Result<app::Si7021Reading, app::SensorError> read() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[AHT20][bus %u][0x%02X] read() start\n", busId_, addr_);
+        LOG_DEBUG("[AHT20][bus %u][0x%02X] read() start", busId_, addr_);
 
         // Trigger measurement: 0xAC 0x33 0x00
         wire_.beginTransmission(addr_);
@@ -59,7 +60,7 @@ public:
         wire_.write(0x33);  // Parameter byte 1
         wire_.write(0x00);  // Parameter byte 2
         if (wire_.endTransmission() != 0) {
-            Serial.printf("[AHT20][bus %u][0x%02X] trigger FAILED\n", busId_, addr_);
+            LOG_ERROR("[AHT20][bus %u][0x%02X] trigger FAILED", busId_, addr_);
             return util::Result<app::Si7021Reading, app::SensorError>::Err(
                 app::SensorError::ReadFailed);
         }
@@ -80,7 +81,7 @@ public:
 
         // Read 6 data bytes
         if (wire_.requestFrom(addr_, (uint8_t)6) != 6) {
-            Serial.printf("[AHT20][bus %u][0x%02X] read data FAILED\n", busId_, addr_);
+            LOG_ERROR("[AHT20][bus %u][0x%02X] read data FAILED", busId_, addr_);
             return util::Result<app::Si7021Reading, app::SensorError>::Err(
                 app::SensorError::ReadFailed);
         }
@@ -92,7 +93,7 @@ public:
 
         // Check if still busy
         if (data[0] & 0x80) {
-            Serial.printf("[AHT20][bus %u][0x%02X] still BUSY\n", busId_, addr_);
+            LOG_ERROR("[AHT20][bus %u][0x%02X] still BUSY", busId_, addr_);
             return util::Result<app::Si7021Reading, app::SensorError>::Err(
                 app::SensorError::ReadFailed);
         }
@@ -116,7 +117,7 @@ public:
 
         // Validate readings
         if (!std::isfinite(tempC) || !std::isfinite(humidity)) {
-            Serial.printf("[AHT20][bus %u][0x%02X] invalid readings\n", busId_, addr_);
+            LOG_ERROR("[AHT20][bus %u][0x%02X] invalid readings", busId_, addr_);
             return util::Result<app::Si7021Reading, app::SensorError>::Err(
                 app::SensorError::ReadFailed);
         }

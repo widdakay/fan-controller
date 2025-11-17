@@ -6,6 +6,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include "hal/I2cSwitcher.hpp"
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -18,9 +19,9 @@ public:
 
     bool begin(float shuntResistorOhm) {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[INA226][bus %u][0x%02X] begin()\n", busId_, addr_);
+        LOG_DEBUG("[INA226][bus %u][0x%02X] begin()", busId_, addr_);
         if (!ina226_.init()) {
-            Serial.printf("[INA226][bus %u][0x%02X] begin() FAILED\n", busId_, addr_);
+            LOG_ERROR("[INA226][bus %u][0x%02X] begin() FAILED", busId_, addr_);
             return false;
         }
 
@@ -41,7 +42,7 @@ public:
 
     util::Result<app::PowerReading, app::SensorError> read() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[INA226][bus %u][0x%02X] read() start\n", busId_, addr_);
+        LOG_DEBUG("[INA226][bus %u][0x%02X] read() start", busId_, addr_);
         app::PowerReading reading;
 
         reading.busVolts = ina226_.getBusVoltage_V();
@@ -52,8 +53,8 @@ public:
         reading.overflow = ina226_.overflow;
         reading.valid = true;
 
-        Serial.printf("[INA226][bus %u][0x%02X] V=%.3fV I=%.1fmA P=%.1fmW\n",
-                      busId_, addr_, reading.busVolts, reading.currentMilliamps, reading.powerMilliwatts);
+        LOG_DEBUG("[INA226][bus %u][0x%02X] V=%.3fV I=%.1fmA P=%.1fmW",
+                  busId_, addr_, reading.busVolts, reading.currentMilliamps, reading.powerMilliwatts);
         return util::Result<app::PowerReading, app::SensorError>::Ok(reading);
     }
 

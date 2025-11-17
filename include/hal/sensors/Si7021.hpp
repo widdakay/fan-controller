@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include "Config.hpp"
 #include "hal/I2cSwitcher.hpp"
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -15,16 +16,16 @@ public:
 
     bool begin() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[Si7021][bus %u][0x%02X] begin()\n", busId_, SI7021_ADDR);
+        LOG_DEBUG("[Si7021][bus %u][0x%02X] begin()", busId_, SI7021_ADDR);
         // Probe device at fixed address
         wire_.beginTransmission(SI7021_ADDR);
         if (wire_.endTransmission() != 0) {
-            Serial.printf("[Si7021][bus %u][0x%02X] probe FAILED\n", busId_, SI7021_ADDR);
+            LOG_ERROR("[Si7021][bus %u][0x%02X] probe FAILED", busId_, SI7021_ADDR);
             return false;
         }
 
         if (!sensor_.begin()) {
-            Serial.printf("[Si7021][bus %u][0x%02X] begin() FAILED\n", busId_, SI7021_ADDR);
+            LOG_ERROR("[Si7021][bus %u][0x%02X] begin() FAILED", busId_, SI7021_ADDR);
             return false;
         }
 
@@ -36,13 +37,13 @@ public:
 
     util::Result<app::Si7021Reading, app::SensorError> read() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[Si7021][bus %u][0x%02X] read() start\n", busId_, SI7021_ADDR);
+        LOG_DEBUG("[Si7021][bus %u][0x%02X] read() start", busId_, SI7021_ADDR);
         float temp = sensor_.readTemperature();
         float humidity = sensor_.readHumidity();
 
         // Check for invalid readings (sensor typically returns NAN on error)
         if (!std::isfinite(temp) || !std::isfinite(humidity)) {
-            Serial.printf("[Si7021][bus %u][0x%02X] read() INVALID\n", busId_, SI7021_ADDR);
+            LOG_ERROR("[Si7021][bus %u][0x%02X] read() INVALID", busId_, SI7021_ADDR);
             return util::Result<app::Si7021Reading, app::SensorError>::Err(
                 app::SensorError::ReadFailed);
         }
@@ -53,8 +54,8 @@ public:
         reading.serialNumber = serialNumber_;
         reading.valid = true;
 
-        Serial.printf("[Si7021][bus %u][0x%02X] T=%.2fC RH=%.2f%%\n",
-                      busId_, SI7021_ADDR, reading.tempC, reading.humidity);
+        LOG_DEBUG("[Si7021][bus %u][0x%02X] T=%.2fC RH=%.2f%%",
+                  busId_, SI7021_ADDR, reading.tempC, reading.humidity);
         return util::Result<app::Si7021Reading, app::SensorError>::Ok(reading);
     }
 
@@ -84,11 +85,11 @@ private:
         wire_.write(0xFA);
         wire_.write(0x0F);
         if (wire_.endTransmission() != 0) {
-            Serial.printf("[Si7021][bus %u] SNA tx failed\n", busId_);
+            LOG_ERROR("[Si7021][bus %u] SNA tx failed", busId_);
             return;
         }
         if (wire_.requestFrom((uint8_t)SI7021_ADDR, (uint8_t)8) != 8) {
-            Serial.printf("[Si7021][bus %u] SNA rx failed\n", busId_);
+            LOG_ERROR("[Si7021][bus %u] SNA rx failed", busId_);
             return;
         }
         for (int i = 0; i < 8; i++) sna[i] = wire_.read();
@@ -98,11 +99,11 @@ private:
         wire_.write(0xFC);
         wire_.write(0xC9);
         if (wire_.endTransmission() != 0) {
-            Serial.printf("[Si7021][bus %u] SNB tx failed\n", busId_);
+            LOG_ERROR("[Si7021][bus %u] SNB tx failed", busId_);
             return;
         }
         if (wire_.requestFrom((uint8_t)SI7021_ADDR, (uint8_t)6) != 6) {
-            Serial.printf("[Si7021][bus %u] SNB rx failed\n", busId_);
+            LOG_ERROR("[Si7021][bus %u] SNB rx failed", busId_);
             return;
         }
         for (int i = 0; i < 6; i++) snb[i] = wire_.read();
@@ -123,9 +124,9 @@ private:
             serial = (serial << 8) | sbytes[i];
         }
         serialNumber_ = serial;
-        Serial.printf("[Si7021][bus %u] Serial: %08llX%08llX\n", busId_,
-                      (unsigned long long)(serial >> 32),
-                      (unsigned long long)(serial & 0xFFFFFFFFULL));
+        LOG_DEBUG("[Si7021][bus %u] Serial: %08llX%08llX", busId_,
+                  (unsigned long long)(serial >> 32),
+                  (unsigned long long)(serial & 0xFFFFFFFFULL));
     }
 
     static constexpr uint8_t SI7021_ADDR = 0x40;  // Fixed I2C address

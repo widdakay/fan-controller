@@ -20,6 +20,7 @@
 #include "hal/sensors/SensorDescriptor.hpp"
 #include "hal/sensors/SensorRegistry.hpp"
 #include "hal/sensors/VirtualSensor.hpp"
+#include "util/Logger.hpp"
 
 // ADC and power monitoring (with post-processing)
 #include "hal/sensors/Ads1115Sensor.hpp"
@@ -38,8 +39,8 @@ namespace hal {
  */
 inline void initializeSensorRegistry() {
     // The act of calling this function ensures all static registrars have run
-    Serial.printf("[AllSensors] Registry initialized with %d sensor types\n",
-                  SensorRegistry::instance().getCount());
+    LOG_INFO("[AllSensors] Registry initialized with %d sensor types",
+             SensorRegistry::instance().getCount());
 }
 
 } // namespace hal

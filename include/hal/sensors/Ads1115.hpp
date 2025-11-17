@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <Arduino.h>
 #include "hal/I2cSwitcher.hpp"
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -14,9 +15,9 @@ public:
 
     bool begin() override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[ADS1115][bus %u][0x%02X] begin()\n", busId_, addr_);
+        LOG_DEBUG("[ADS1115][bus %u][0x%02X] begin()", busId_, addr_);
         if (!adc_.begin(addr_, &wire_)) {
-            Serial.printf("[ADS1115][bus %u][0x%02X] begin() FAILED\n", busId_, addr_);
+            LOG_ERROR("[ADS1115][bus %u][0x%02X] begin() FAILED", busId_, addr_);
             return false;
         }
         // Set gain to measure up to 4.096V (default)
@@ -26,7 +27,7 @@ public:
 
     util::Result<float, app::I2cError> readVolts(uint8_t channel) override {
         hal::I2cSwitcher::instance().useBusId(busId_);
-        Serial.printf("[ADS1115][bus %u][0x%02X] read(ch=%u) start\n", busId_, addr_, channel);
+        LOG_DEBUG("[ADS1115][bus %u][0x%02X] read(ch=%u) start", busId_, addr_, channel);
         if (channel > 3) {
             return util::Result<float, app::I2cError>::Err(app::I2cError::Unknown);
         }
@@ -40,7 +41,7 @@ public:
             return util::Result<float, app::I2cError>::Err(app::I2cError::InvalidData);
         }
 
-        Serial.printf("[ADS1115][bus %u][0x%02X] ch%u = %.4f V\n", busId_, addr_, channel, volts);
+        LOG_DEBUG("[ADS1115][bus %u][0x%02X] ch%u = %.4f V", busId_, addr_, channel, volts);
         return util::Result<float, app::I2cError>::Ok(volts);
     }
 

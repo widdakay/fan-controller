@@ -7,6 +7,7 @@
 #include "util/Thermistor.hpp"
 #include "app/Types.hpp"
 #include <Arduino.h>
+#include "util/Logger.hpp"
 
 namespace hal {
 
@@ -81,8 +82,8 @@ public:
             adc_.get(), 3, 2.0f, "5v_rail", busId_, address_
         ));
 
-        Serial.printf("[ADS1115][bus %u][0x%02X] Created %d post-processed sensors\n",
-                      busId_, address_, sensors.size());
+        LOG_DEBUG("[ADS1115][bus %u][0x%02X] Created %d post-processed sensors",
+                  busId_, address_, sensors.size());
 
         return sensors;
     }
