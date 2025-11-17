@@ -260,7 +260,7 @@ private:
      */
     util::Result<void, app::ConfigError> load() {
         // Device info
-        config_.deviceName = prefs_.getString("deviceName", "ESP32-Fan");
+        config_.deviceName = prefs_.getString("deviceName", config::DEVICE_NAME);
 
         // WiFi credentials
         uint8_t wifiCount = prefs_.getUChar("wifiCount", 0);
@@ -278,14 +278,14 @@ private:
         }
 
         // MQTT config
-        config_.mqttServer = prefs_.getString("mqttServer", "192.168.1.1");
-        config_.mqttPort = prefs_.getUShort("mqttPort", 1883);
-        config_.mqttTopicPowerCommand = prefs_.getString("mqttCmdTopic", "device/fan/power");
-        config_.mqttTopicPowerStatus = prefs_.getString("mqttStatTopic", "device/fan/power/status");
+        config_.mqttServer = prefs_.getString("mqttServer", config::MQTT_SERVER);
+        config_.mqttPort = prefs_.getUShort("mqttPort", config::MQTT_PORT);
+        config_.mqttTopicPowerCommand = prefs_.getString("mqttCmdTopic", config::MQTT_TOPIC_POWER_COMMAND);
+        config_.mqttTopicPowerStatus = prefs_.getString("mqttStatTopic", config::MQTT_TOPIC_POWER_STATUS);
 
         // API endpoints
-        config_.apiInfluxDb = prefs_.getString("apiInflux", "https://data.example.com/particle/log");
-        config_.apiFirmwareUpdate = prefs_.getString("apiFwUpdate", "https://data.example.com/particle/fw/update");
+        config_.apiInfluxDb = prefs_.getString("apiInflux", config::API_INFLUXDB);
+        config_.apiFirmwareUpdate = prefs_.getString("apiFwUpdate", config::API_FW_UPDATE);
 
         Logger::info("[ConfigManager] Configuration loaded from NVS");
         return util::Result<void, app::ConfigError>::Ok();

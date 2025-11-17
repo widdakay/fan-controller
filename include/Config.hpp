@@ -94,7 +94,6 @@ inline constexpr float INA226_SHUNT_OHM = 0.001f;  // 1 milliohm
 // Motor PWM
 inline constexpr uint32_t MOTOR_PWM_FREQ_HZ = 20000;  // 20 kHz
 inline constexpr uint8_t  MOTOR_PWM_BITS    = 10;     // 10-bit resolution
-inline constexpr uint32_t MOTOR_DIRECTION_DEADTIME_MS = 2;
 
 // Thermistor parameters (10k NTC)
 inline constexpr float THERMISTOR_R0 = 10000.0f;  // 10k ohm at 25°C
@@ -132,39 +131,17 @@ inline constexpr uint32_t ONEWIRE_CONVERSION_MS = 800;
 inline constexpr const char* API_INFLUXDB = "https://data.yoerik.com/particle/log";
 inline constexpr const char* API_FW_UPDATE = "https://data.yoerik.com/particle/fw/update";
 
-// // MQTT Configuration
-// inline constexpr uint16_t MQTT_PORT = 1883;
-// inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "home/fan1/power";
-// inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "home/fan1/power/status";
-
-// // Device identification
-// inline constexpr const char* DEVICE_NAME = "UnderHouseFan";
-
-// // MQTT Configuration
-// inline constexpr uint16_t MQTT_PORT = 1883;
-// inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "lucect/fan1/power";
-// inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "lucect/fan1/power/status";
-
-// // Device identification
-// inline constexpr const char* DEVICE_NAME = "LuceCTTestFan";
-
-
-// // MQTT Configuration
-// inline constexpr uint16_t MQTT_PORT = 1883;
-// inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard/fan1/power";
-// inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard/fan1/power/status";
-
-// // Device identification
-// inline constexpr const char* DEVICE_NAME = "TestBoard";
-
-
 // MQTT Configuration
+// Note: Device-specific configuration is managed via NVS (ConfigManager)
+// These are compile-time defaults that can be overridden at runtime
+// Generic defaults allow same firmware binary to work for all devices
 inline constexpr uint16_t MQTT_PORT = 1883;
-inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "testboard3/fan1/power";
-inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "testboard3/fan1/power/status";
+inline constexpr const char* MQTT_TOPIC_POWER_COMMAND = "device/fan/power";
+inline constexpr const char* MQTT_TOPIC_POWER_STATUS = "device/fan/power/status";
 
 // Device identification
-inline constexpr const char* DEVICE_NAME = "TestBoard3";
+// Generic default - actual device name comes from NVS configuration
+inline constexpr const char* DEVICE_NAME = "ESP32-Fan";
 
 // ============================================================================
 // Compile-time validation
