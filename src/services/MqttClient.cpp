@@ -15,6 +15,7 @@ void MqttClient::begin(const String& server, uint16_t port,
     topicConfig_ = commandTopic.substring(0, commandTopic.lastIndexOf('/')) + "/config";
 
     client_.setServer(mqttServer_.c_str(), mqttPort_);
+    client_.setKeepAlive(60);  // 60 second keepalive
     client_.setCallback([this](char* topic, byte* payload, unsigned int length) {
         this->messageCallback(topic, payload, length);
     });
@@ -29,12 +30,15 @@ void MqttClient::setConfigCallback(ConfigCallback callback) {
 }
 
 void MqttClient::loop() {
+    // Always call client.loop() to handle MQTT protocol and detect disconnections
+    client_.loop();
+
+    // Check if we need to reconnect
     if (!client_.connected()) {
         if (reconnectTimer_.check()) {
+            LOG_WARN("MQTT disconnected, attempting reconnect...");
             reconnect();
         }
-    } else {
-        client_.loop();
     }
 }
 
@@ -53,27 +57,28 @@ bool MqttClient::publishPowerStatus(float powerLevel) {
 
 void MqttClient::reconnect() {
     if (WiFi.status() != WL_CONNECTED) {
+        LOG_DEBUG("WiFi not connected, skipping MQTT reconnect");
         return;
     }
 
-    Logger::info("Connecting to MQTT...");
+    LOG_INFO("Connecting to MQTT...");
 
     // Generate client ID from chip ID
     String clientId = "ESP32-";
     clientId += String((uint32_t)ESP.getEfuseMac(), HEX);
 
     if (client_.connect(clientId.c_str())) {
-        Logger::info(" connected");
+        LOG_INFO("MQTT connected successfully");
 
         // Subscribe to power command topic
         client_.subscribe(topicCommandPower_.c_str());
-        Logger::info("Subscribed to %s", topicCommandPower_.c_str());
+        LOG_INFO("Subscribed to %s", topicCommandPower_.c_str());
 
         // Subscribe to config topic
         client_.subscribe(topicConfig_.c_str());
-        Logger::info("Subscribed to %s", topicConfig_.c_str());
+        LOG_INFO("Subscribed to %s", topicConfig_.c_str());
     } else {
-        Logger::error(" failed, rc=%d", client_.state());
+        LOG_ERROR("MQTT connection failed, rc=%d", client_.state());
     }
 }
 
@@ -83,7 +88,7 @@ void MqttClient::messageCallback(char* topic, byte* payload, unsigned int length
     memcpy(buffer, payload, length);
     buffer[length] = '\0';
 
-    Logger::info("MQTT message: %s = %s", topic, buffer);
+    LOG_INFO("MQTT message received: %s = %s", topic, buffer);
 
     // Check if this is a config message
     if (strcmp(topic, topicConfig_.c_str()) == 0) {
